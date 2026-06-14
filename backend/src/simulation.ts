@@ -55,8 +55,8 @@ export function runMonteCarloSimulation(
     homeAdvantage:1.1,
   };
   const b = computeLambda(li);
-  const bH = Math.max(0.2, Math.min(3.5, b.homeLambda));
-  const bA = Math.max(0.2, Math.min(3.5, b.awayLambda));
+  const bH = Math.max(0.2, b.homeLambda);
+  const bA = Math.max(0.2, b.awayLambda);
 
   const N=10000, sp=roundQuarter((bH-bA)*0.6), maxT=dixonColesMaxTau(bH,bA);
   let hW=0,d=0,aW=0,o25=0,cov=0,psh=0,acc=0;

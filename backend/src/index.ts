@@ -7,6 +7,7 @@ import evaluateRouter from './routes/evaluate';
 import trainRouter from './routes/train';
 import backtestRouter from './routes/backtest';
 import dataSyncRouter from './routes/dataSync';
+import adminRouter from './routes/admin';
 
 const app = express();
 const port = 3000;
@@ -24,6 +25,7 @@ app.use('/api', evaluateRouter);
 app.use('/api', trainRouter);
 app.use('/api', backtestRouter);
 app.use('/api', dataSyncRouter);
+app.use('/api', adminRouter);
 
 // Manual trigger endpoint
 app.post('/api/sync', async (_req, res) => {

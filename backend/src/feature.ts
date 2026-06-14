@@ -91,14 +91,17 @@ export interface LambdaInput {
 }
 
 export function computeLambda(input: LambdaInput): { homeLambda: number; awayLambda: number } {
-  const eloDiff = input.homeElo - input.awayElo;
+  const rawDiff = input.homeElo - input.awayElo;
+  // Taper ELO: beyond 200pt gap, marginal effect halves
+  const cappedDiff = Math.abs(rawDiff) > 200 ? 200 + (Math.abs(rawDiff) - 200) * 0.5 : Math.abs(rawDiff);
+  const eloDiff = cappedDiff * Math.sign(rawDiff);
   const eloFactor = 1 + (eloDiff / 400) * 0.10;
   const momentum = Math.min(input.homeForm / Math.max(input.awayForm, 0.1), 1.3);
 
-  // Scale factor keeps λ in realistic football range [0.5, 3.0]
+  // Scale + soft clamp: λ > 2.5 gets diminishing returns
   const SCALE = 0.65;
 
-  const homeLambda =
+  let homeLambda =
     input.homeAttack *
     input.awayDefense *
     eloFactor *
@@ -106,16 +109,19 @@ export function computeLambda(input: LambdaInput): { homeLambda: number; awayLam
     momentum *
     SCALE;
 
-  const awayLambda =
+  let awayLambda =
     input.awayAttack *
     input.homeDefense *
     (2 - Math.min(eloFactor, 1.6)) *
     (1 / input.homeAdvantage) *
     SCALE;
 
+  // Soft clamp: beyond 2.3, reduce excess to 20%
+  const softClamp = (x: number) => x > 2.3 ? 2.3 + (x - 2.3) * 0.20 : x;
+
   return {
-    homeLambda: parseFloat(Math.max(0.1, homeLambda).toFixed(4)),
-    awayLambda: parseFloat(Math.max(0.1, awayLambda).toFixed(4)),
+    homeLambda: parseFloat(Math.max(0.1, softClamp(homeLambda)).toFixed(4)),
+    awayLambda: parseFloat(Math.max(0.1, softClamp(awayLambda)).toFixed(4)),
   };
 }
 
