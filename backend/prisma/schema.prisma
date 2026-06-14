@@ -1,0 +1,178 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Team {
+  id              String   @id
+  name            String   @unique
+  chinaName       String
+  shortName       String
+  flagUrl         String
+  eloRating       Float
+  homeMatches     Match[]  @relation("HomeTeam")
+  awayMatches     Match[]  @relation("AwayTeam")
+  stats           TeamStats[]
+  players         Player[]
+  predictionHistory PredictionHistory[]
+}
+
+model TeamStats {
+  id                String   @id
+  teamId            String
+  team              Team     @relation(fields: [teamId], references: [id])
+  matchDate         DateTime
+  expectedGoalsFor  Float
+  expectedGoalsAgst Float
+  formScore         Float
+}
+
+model Player {
+  id         String        @id
+  teamId     String
+  team       Team          @relation(fields: [teamId], references: [id])
+  name       String
+  importance Float
+  stats      PlayerStats[]
+}
+
+model PlayerStats {
+  id        String   @id
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id])
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id])
+  isInjured Boolean  @default(false)
+}
+
+model Match {
+  id            String              @id
+  matchDate     DateTime
+  groupName     String
+  stage         String
+  homeTeamId    String
+  awayTeamId    String
+  homeTeam      Team                @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam      Team                @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  status        String              @default("scheduled")
+  homeScore     Int?
+  awayScore     Int?
+  odds          Odds[]
+  oddsHistory   OddsHistory[]
+  oddsSnapshots OddsSnapshot[]
+  playerStats   PlayerStats[]
+  predictions   PredictionHistory[]
+  featureSnapshots FeatureSnapshot[]
+  matchStats     MatchStats?
+}
+
+model Odds {
+  id              String   @id
+  matchId         String
+  match           Match    @relation(fields: [matchId], references: [id])
+  currentHomeOdds Float
+  currentDrawOdds Float
+  currentAwayOdds Float
+  updatedAt       DateTime @updatedAt
+}
+
+model OddsHistory {
+  id              String   @id
+  matchId         String
+  match           Match    @relation(fields: [matchId], references: [id])
+  timestamp       DateTime
+  homeOdds        Float
+  drawOdds        Float
+  awayOdds        Float
+}
+
+// Time-series odds snapshots for market movement analysis
+model OddsSnapshot {
+  id        String   @id @default(cuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id])
+  timestamp DateTime @default(now())
+  homeOdds  Float
+  drawOdds  Float
+  awayOdds  Float
+  source    String   @default("sporttery")  // data source identifier
+}
+
+model PredictionHistory {
+  id               String   @id
+  matchId          String
+  match            Match    @relation(fields: [matchId], references: [id])
+  teamId           String
+  team             Team     @relation(fields: [teamId], references: [id])
+  predHomeWin      Float
+  predDraw         Float
+  predAwayWin      Float
+  actualOutcome    String?
+  featureVersion   String
+  modelVersion     String
+  simulationVersion String
+  createdAt        DateTime @default(now())
+}
+
+model FeatureSnapshot {
+  id               String   @id
+  matchId          String
+  match            Match    @relation(fields: [matchId], references: [id])
+  eloDiff          Float
+  xgDiff           Float
+  xgaDiff          Float
+  formDiff         Float
+  injuryDiff       Float
+  oddsDelta        Float
+  homeLambda       Float
+  awayLambda       Float
+  featureVersion   String
+  modelVersion     String
+  createdAt        DateTime @default(now())
+}
+
+// ─── Real Match Statistics ───
+model MatchStats {
+  id        String @id @default(cuid())
+  matchId   String @unique
+  match     Match  @relation(fields: [matchId], references: [id])
+
+  // Attack
+  shotsHome          Int
+  shotsAway          Int
+  shotsOnTargetHome  Int
+  shotsOnTargetAway  Int
+  xgHome             Float?
+  xgAway             Float?
+  possessionHome     Float?
+  possessionAway     Float?
+  cornersHome        Int       @default(0)
+  cornersAway        Int       @default(0)
+
+  // Defense / Discipline
+  foulsHome          Int       @default(0)
+  foulsAway          Int       @default(0)
+  redCardsHome       Int       @default(0)
+  redCardsAway       Int       @default(0)
+
+  // Meta
+  source             String    @default("estimated")  // REAL / ESTIMATED / DERIVED
+  confidence         Float     @default(0.5)
+
+  createdAt          DateTime  @default(now())
+}
+
+// ─── Data Source Metadata ───
+model DataMeta {
+  id         String   @id @default(cuid())
+  entityType String   // match / team / stats / odds / elo
+  entityId   String
+  source     String   // REAL / ESTIMATED / MODEL / DERIVED
+  confidence Float    @default(0.5)
+  version    String   @default("v1.0")
+  createdAt  DateTime @default(now())
+}

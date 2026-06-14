@@ -1,0 +1,28 @@
+{
+  "name": "football-prediction-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "seed": "ts-node prisma/seed.ts",
+    "seed-2026": "ts-node prisma/seed-2026.ts",
+    "sync-live": "ts-node src/sync-live.ts",
+    "sync-watch": "node -e \"setInterval(()=>{require('child_process').execSync('npx ts-node src/sync-live.ts',{stdio:'inherit'})},3600000)\"",
+    "sync": "ts-node -r dotenv/config src/sync.ts",
+    "enrich": "ts-node -r dotenv/config src/enrich.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "express": "^4.18.2",
+    "prisma": "^5.15.0",
+    "@prisma/client": "^5.15.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.18",
+    "@types/node": "^20.14.2",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.4"
+  }
+}

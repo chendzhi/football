@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.db
+*.db-journal
+.env
+backend/.env
+/tmp/
+/claude/
+backend/sporttery_*.json
+backend/install-log.txt
