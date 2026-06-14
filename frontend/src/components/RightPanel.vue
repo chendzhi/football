@@ -29,6 +29,7 @@
         <div
           v-for="match in group.matches"
           :key="match.id"
+          :id="'match-'+match.id"
           class="match-card"
           :class="{ 'is-selected': selectedMatchId === match.id }"
           @click="selectMatch(match)"
@@ -67,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import type { Match } from '../types';
 import { getChinaName, formatStage, formatMatchTime } from '../team-names';
 
@@ -76,14 +77,26 @@ const emit = defineEmits<{ 'select-match': [match: Match] }>();
 const matches = ref<Match[]>([]);
 const selectedMatchId = ref<string | null>(null);
 const searchQuery = ref('');
+const matchListRef = ref<HTMLElement | null>(null);
+
+function scrollToMatch(matchId: string) {
+  nextTick(() => {
+    const el = document.getElementById('match-' + matchId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
 
 onMounted(async () => {
   const res = await fetch('/api/matches');
   const data = await res.json();
   matches.value = data;
-  if (data.length > 0) {
-    selectedMatchId.value = data[0].id;
-    emit('select-match', data[0]);
+  // Auto-select first upcoming (scheduled) match
+  const upcoming = data.find((m: Match) => m.status === 'scheduled');
+  const target = upcoming || data[0];
+  if (target) {
+    selectedMatchId.value = target.id;
+    emit('select-match', target);
+    scrollToMatch(target.id);
   }
 });
 
@@ -242,8 +255,8 @@ function onFlagError(e: Event) {
   margin-bottom: 10px;
   font-size: 11px;
 }
-.card-time { color: #94a3b8; }
-.card-stage { color: #475569; font-size: 10px; }
+.card-time { color: #94a3b8; font-size: 12px; font-weight: 500; }
+.card-stage { color: #64748b; font-size: 11px; background: rgba(30,41,59,0.6); padding: 2px 8px; border-radius: 6px; }
 
 .card-teams {
   display: flex;

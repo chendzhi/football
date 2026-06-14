@@ -79,6 +79,9 @@
 
     <!-- ═══════════ PREDICTION REPORT ═══════════ -->
     <div class="report-area" v-if="report && !errorMessage">
+      <!-- Tactical Radar (replaces ELO numbers) -->
+      <TacticalRadar :radar="radar" />
+
       <!-- Probability Bar -->
       <div class="prob-section">
         <div class="section-title">🎰 WIN PROBABILITY / 胜平负概率 DISTRIBUTION</div>
@@ -96,50 +99,27 @@
         </div>
       </div>
 
-      <!-- Cards Row: Top Score + O/U Spread -->
+      <!-- Prediction Tree (replaces static Top3) -->
+      <PredictionTree :paths="paths" />
+
+      <!-- Sandbox + AI Narrative side by side -->
       <div class="cards-row">
-        <!-- Top Score -->
+        <SandboxController @override-predict="(t) => emit('override-predict', t)" />
         <div class="mini-card">
-          <div class="mini-card-title">📊 TOP SCORE REC.</div>
-          <div class="mini-card-body">
-            <div class="score-row" v-for="(item, i) in report.topScores" :key="item.score">
-              <span class="score-rank">#{{ i + 1 }}</span>
-              <span class="score-num">{{ item.score }}</span>
-              <span class="score-pct">{{ item.prob }}%</span>
-            </div>
-          </div>
-        </div>
-        <!-- O/U + Spread -->
-        <div class="mini-card">
-          <div class="mini-card-title">🎯 O/U & SPREAD PREDICTIONS</div>
-          <div class="mini-card-body">
-            <div class="ou-row">
-              <span>大小球 (2.5)</span>
-              <span class="ou-value">
-                <span class="ou-over">OVER {{ (report.over25Prob * 100).toFixed(1) }}%</span>
-                <span class="ou-div">/</span>
-                <span class="ou-under">UNDER {{ (report.under25Prob * 100).toFixed(1) }}%</span>
-              </span>
-            </div>
-            <div class="ou-row">
-              <span>让球盘 ({{ formatSpread(report.spread.line) }})</span>
-              <span class="ou-value">COVER {{ (report.spread.coverProb * 100).toFixed(1) }}%</span>
-            </div>
-            <div class="ou-row confidence-row">
-              <span>CONFIDENCE / 置信度</span>
-              <span class="confidence-value">{{ (report.confidence * 100).toFixed(1) }}%</span>
-            </div>
-          </div>
+          <div class="mini-card-title">🧠 AI COGNITIVE REPORT / 精算师裁决</div>
+          <div class="narrative-text">{{ narrative || '认知引擎待命中，请激活 AI 预测...' }}</div>
+          <div class="ou-row"><span>大小球 (2.5)</span><span class="ou-value"><span class="ou-over">OVER {{ (report.over25Prob * 100).toFixed(1) }}%</span> / <span class="ou-under">UNDER {{ (report.under25Prob * 100).toFixed(1) }}%</span></span></div>
+          <div class="ou-row"><span>让球 ({{ formatSpread(report.spread.line) }})</span><span class="ou-value">COVER {{ (report.spread.coverProb * 100).toFixed(1) }}%</span></div>
         </div>
       </div>
 
-      <!-- Terminal Logs -->
+      <!-- System Logs -->
       <div class="terminal-section">
         <div class="terminal-title">⚡ SYSTEM TERMINAL LOGS</div>
         <div class="terminal-body">
-          <div class="log-line">>> [GRAPH] 装载 {{ currentMatch?.homeTeam?.name || 'HOME' }} vs {{ currentMatch?.awayTeam?.name || 'AWAY' }} 差值特征矩阵</div>
-          <div class="log-line">>> [COMPUTE] 正在调用 Dixon-Coles 蒙特卡洛积分模拟层...</div>
-          <div class="log-line">>> [SUCCESS] 万次模型收敛完成。主队 λ: {{ report.lambdas.homeLambda }} | 客队 λ: {{ report.lambdas.awayLambda }}</div>
+          <div class="log-line">>> [LAMBDA] 主队 λ: {{ report.lambdas.homeLambda }} | 客队 λ: {{ report.lambdas.awayLambda }}</div>
+          <div class="log-line">>> [MC] Dixon-Coles (ρ=-0.12) + 时间切片 9×10min + noise floor 8%</div>
+          <div class="log-line">>> [CALIBRATE] Platt + Isotonic 双校准已应用</div>
           <div class="log-line">>> [SNAPSHOT] 特征快照 + 预测记录已持久化</div>
         </div>
       </div>
@@ -151,15 +131,19 @@
 import { computed } from 'vue';
 import type { Match, SimulationReport } from '../types';
 import { getChinaName, formatStage } from '../team-names';
+import TacticalRadar from './TacticalRadar.vue';
+import PredictionTree from './PredictionTree.vue';
+import SandboxController from './SandboxController.vue';
 
 const props = defineProps<{
   currentMatch: Match | null;
   report: SimulationReport | null;
   loading: boolean;
   errorMessage: string | null;
+  paths?: any; radar?: any; narrative?: string;
 }>();
 
-const emit = defineEmits<{ 'trigger-predict': [matchId: string] }>();
+const emit = defineEmits<{ 'trigger-predict': [matchId: string]; 'override-predict': [tweaks: any] }>();
 
 const iterations = 10000;
 const isMatchCompleted = computed(() =>
@@ -281,20 +265,14 @@ function onFlagError(e: Event) {
 }
 .away-col .team-detail { align-items: flex-end; }
 .team-name-en {
-  font-size: 17px;
-  font-weight: 700;
-  color: #f1f5f9;
+  font-size: 16px; font-weight: 700; color: #f1f5f9;
 }
 .team-name-cn {
-  font-size: 13px;
-  color: #94a3b8;
-  margin-top: 2px;
+  font-size: 14px; color: #94a3b8; margin-top: 2px;
 }
 .team-elo {
-  font-size: 11px;
-  color: #38bdf8;
-  margin-top: 3px;
-  font-family: monospace;
+  font-size: 11px; color: #38bdf8; margin-top: 4px; font-family: monospace;
+  background: rgba(56,189,248,0.08); padding: 2px 8px; border-radius: 4px; display: inline-block;
 }
 
 /* ── Action Row ── */
@@ -420,10 +398,10 @@ function onFlagError(e: Event) {
   border: 1px solid rgba(56, 189, 248, 0.12);
   border-radius: 14px;
   padding: 18px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 .section-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #38bdf8;
   letter-spacing: 1px;
@@ -439,9 +417,9 @@ function onFlagError(e: Event) {
   overflow: hidden;
   background: rgba(30, 41, 59, 0.6);
 }
-.bar-home { background: linear-gradient(90deg, #2563eb, #3b82f6); }
-.bar-draw { background: linear-gradient(90deg, #475569, #64748b); }
-.bar-away { background: linear-gradient(90deg, #dc2626, #ef4444); }
+.bar-home { background: linear-gradient(90deg, #1d4ed8, #3b82f6, #60a5fa); border-radius: 5px 0 0 5px; }
+.bar-draw { background: linear-gradient(90deg, #475569, #64748b, #94a3b8); }
+.bar-away { background: linear-gradient(90deg, #ef4444, #dc2626, #b91c1c); border-radius: 0 5px 5px 0; }
 .prob-labels {
   display: flex;
   justify-content: space-between;
@@ -452,6 +430,7 @@ function onFlagError(e: Event) {
 .label-draw { color: #94a3b8; }
 .label-away { color: #ef4444; }
 
+.narrative-text { color: #94a3b8; font-size: 12px; line-height: 1.6; margin-bottom: 12px; min-height: 50px; }
 /* ── Cards Row ── */
 .cards-row {
   display: flex;

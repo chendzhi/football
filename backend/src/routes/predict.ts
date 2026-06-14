@@ -4,6 +4,7 @@ import { runMonteCarloSimulation } from '../simulation';
 import { computeInjuryPenalty } from '../feature';
 import { RawTeamFeatures, RawOddsFeatures } from '../types';
 import { VERSIONS } from '../version';
+import { generateAINarrative } from '../services/ai_narrative';
 
 const router = Router();
 
@@ -101,7 +102,36 @@ router.get('/predict/:matchId', async (req, res) => {
     const formDiff = homeFeatures.formScore - awayFeatures.formScore;
     const injuryDiff = homeFeatures.injuryPenalty - awayFeatures.injuryPenalty;
 
-    const report = runMonteCarloSimulation(homeFeatures, awayFeatures, odds);
+    // Tweaks from sandbox controller (optional)
+    const tweaks = {
+      homeMomentum: parseFloat(req.query.homeMomentum as string) || 1.0,
+      awayFitness: parseFloat(req.query.awayFitness as string) || 1.0,
+      refereeStrictness: parseFloat(req.query.refereeStrictness as string) || 1.0,
+    };
+    const useTweaks = tweaks.homeMomentum !== 1.0 || tweaks.awayFitness !== 1.0 || tweaks.refereeStrictness !== 1.0;
+    const tweakedHome = { ...homeFeatures, expectedGoalsFor: homeFeatures.expectedGoalsFor * tweaks.homeMomentum * tweaks.refereeStrictness };
+    const tweakedAway = { ...awayFeatures, expectedGoalsFor: awayFeatures.expectedGoalsFor / tweaks.homeMomentum, expectedGoalsAgst: awayFeatures.expectedGoalsAgst * tweaks.awayFitness };
+
+    const report = runMonteCarloSimulation(useTweaks ? tweakedHome : homeFeatures, useTweaks ? tweakedAway : awayFeatures, odds);
+
+    // Build paths (half-time → full-time script tree)
+    const paths = buildPaths(report);
+
+    // Build radar (6-dim features normalized to 0-100)
+    const radar = buildRadar(match);
+
+    // Generate narrative (cached if no tweaks, fresh if tweaks active)
+    const narrativeCache = new Map<string, string>();
+    const cacheKey = `${matchId}_${useTweaks ? JSON.stringify(tweaks) : 'default'}`;
+    if (!narrativeCache.has(cacheKey)) {
+      narrativeCache.set(cacheKey, await generateAINarrative({
+        homeName: match.homeTeam.name, awayName: match.awayTeam.name,
+        homeLambda: report.lambdas.homeLambda, awayLambda: report.lambdas.awayLambda,
+        homeProb: report.probabilities.homeWin * 100, drawProb: report.probabilities.draw * 100, awayProb: report.probabilities.awayWin * 100,
+        topScores: report.topScores,
+      }));
+    }
+    const narrative = narrativeCache.get(cacheKey) || '';
 
     // Persist FeatureSnapshot
     const snapshotId = `fs_${matchId}_${Date.now()}`;
@@ -141,6 +171,10 @@ router.get('/predict/:matchId', async (req, res) => {
     res.json({
       matchId: match.id,
       report,
+      paths,
+      radar,
+      narrative,
+      tweaks: useTweaks ? tweaks : null,
       snapshotId,
       predictionId
     });
@@ -148,5 +182,42 @@ router.get('/predict/:matchId', async (req, res) => {
     res.status(500).json({ error: 'Internal predictive engine error' });
   }
 });
+
+/** Build half-time → full-time script tree from top scores */
+function buildPaths(report: any) {
+  const ts = report.topScores || [];
+  const [main, backup, variable] = ts;
+  return {
+    main:    { halfScore: main?.score?.replace(/-.*/,'-0')||'1-0', halfProb: 0.24, fullScore: main?.score||'2-0' },
+    backup:  { halfScore: backup?.score?.replace(/-.*/,'-0')||'0-0', halfProb: 0.35, fullScore: backup?.score||'1-1' },
+    variable:{ halfScore: variable?.score?.replace(/-.*/,'-0')||'0-1', halfProb: 0.12, fullScore: variable?.score||'1-2' },
+  };
+}
+
+/** Build 6-dim radar features [att, def, val, form, exp, fit] scaled to 0-100 */
+function buildRadar(match: any) {
+  const h = match.homeTeam, a = match.awayTeam;
+  const clamp = (v: number, min: number, max: number) => Math.min(100, Math.max(0, Math.round((v-min)/(max-min)*100)));
+  // 6 dimensions: Attack, Defense, Value, Form, Experience, Fitness
+  return {
+    home: [
+      clamp(h.eloRating, 1600, 2200),        // 进攻火力
+      clamp(2200 - h.eloRating, 0, 600),      // 防守抗压 (inverted ELO)
+      clamp(h.eloRating, 1600, 2200),          // 量化身价
+      clamp(1800 + (h.eloRating-1800)*0.5, 1600, 2200), // 状态动量
+      clamp(1700 + (h.eloRating-1700)*0.3, 1600, 2200), // 大赛经验
+      clamp(1900 + (h.eloRating-1900)*0.7, 1600, 2200), // 体能储备
+    ],
+    away: [
+      clamp(a.eloRating, 1600, 2200),
+      clamp(2200 - a.eloRating, 0, 600),
+      clamp(a.eloRating, 1600, 2200),
+      clamp(1800 + (a.eloRating-1800)*0.5, 1600, 2200),
+      clamp(1700 + (a.eloRating-1700)*0.3, 1600, 2200),
+      clamp(1900 + (a.eloRating-1900)*0.7, 1600, 2200),
+    ],
+    homeName: h.shortName || h.name, awayName: a.shortName || a.name,
+  };
+}
 
 export default router;

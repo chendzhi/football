@@ -85,23 +85,40 @@ export function runMonteCarloSimulation(
   }
 
   const rH=hW/acc,rD=d/acc,rA=aW/acc;
+  // Noise floor: 8% reserved for randomness → prevents overconfidence
+  const NOISE=0.08;
+  const sH=rH*(1-NOISE)+NOISE/3, sD=rD*(1-NOISE)+NOISE/3, sA=rA*(1-NOISE)+NOISE/3;
+  const sum=sH+sD+sA;
+  const fH=sH/sum, fD=sD/sum, fA=sA/sum;
+
+  // Apply calibration to noise-smoothed probs
   const ap=(p:number)=>{const i=getIsotonic().calibrate(p);return Math.abs(i-p)>0.001?i:getCalibrator().calibrate(p)};
-  const[cH,cD,cA]=[ap(rH),ap(rD),ap(rA)],s=cH+cD+cA;
+  const[cH,cD,cA]=[ap(fH),ap(fD),ap(fA)],cs=cH+cD+cA;
 
   const ts=[...sm.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3)
     .map(([sc,c])=>({score:sc,prob:((c/acc)*100).toFixed(1)}));
 
+  // O/U from score matrix (not separate counter — ensures data consistency)
+  let overFromMatrix=0, totalWeight=0;
+  for(const [score,weight] of sm) {
+    const [h,a]=score.split('-').map(Number);
+    totalWeight+=weight;
+    if(h+a>2.5) overFromMatrix+=weight;
+  }
+  const rOH2=totalWeight>0?overFromMatrix/totalWeight:o25/acc;
+  const sOH=rOH2*(1-NOISE)+NOISE/2, sUH=(1-rOH2)*(1-NOISE)+NOISE/2;
+
   return {
     lambdas:{homeLambda:bH,awayLambda:bA},
     probabilities:{
-      homeWin:parseFloat((s>0?cH/s:rH).toFixed(3)),
-      draw:parseFloat((s>0?cD/s:rD).toFixed(3)),
-      awayWin:parseFloat((s>0?cA/s:rA).toFixed(3)),
+      homeWin:parseFloat((cs>0?cH/cs:fH).toFixed(3)),
+      draw:parseFloat((cs>0?cD/cs:fD).toFixed(3)),
+      awayWin:parseFloat((cs>0?cA/cs:fA).toFixed(3)),
       rawHomeWin:parseFloat(rH.toFixed(3)),rawDraw:parseFloat(rD.toFixed(3)),rawAwayWin:parseFloat(rA.toFixed(3)),
     },
     topScores:ts,
-    over25Prob:parseFloat(getPerScoreCalibrator().calibrate('homeWin',o25/acc).toFixed(3)),
-    under25Prob:parseFloat(((acc-o25)/acc).toFixed(3)),
+    over25Prob:parseFloat(sOH.toFixed(3)),
+    under25Prob:parseFloat(sUH.toFixed(3)),
     spread:{line:sp,coverProb:psh<acc?parseFloat((cov/(acc-psh)).toFixed(3)):0.5},
     confidence:parseFloat((Math.max(hW,d,aW)/acc).toFixed(3)),
   };

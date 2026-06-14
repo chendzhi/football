@@ -113,6 +113,18 @@ export async function autoSync(prisma: PrismaClient): Promise<string> {
       }
     }
 
+    // Auto-update ELO for all completed matches
+    if (scores > 0) {
+      const completed = await prisma.match.findMany({ where: { status: 'completed', homeScore: { not: null } }, include: { homeTeam: true, awayTeam: true } });
+      for (const m of completed) {
+        const exp = eloExpected(m.homeTeam.eloRating, m.awayTeam.eloRating);
+        const act = m.homeScore! > m.awayScore! ? 1 : m.homeScore! < m.awayScore! ? 0 : 0.5;
+        await prisma.team.update({ where: { id: m.homeTeamId }, data: { eloRating: eloUpdate(m.homeTeam.eloRating, exp, act) } });
+        await prisma.team.update({ where: { id: m.awayTeamId }, data: { eloRating: eloUpdate(m.awayTeam.eloRating, 1 - exp, 1 - act) } });
+      }
+      log.push(`ELO updated for ${completed.length * 2} teams`);
+    }
+
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     log.unshift(`[auto-sync ${new Date().toLocaleTimeString()}] ${scores} scores | ${odds} odds | ${snapshots} snapshots | ${elapsed}s`);
   } catch (e: any) {

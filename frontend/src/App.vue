@@ -6,7 +6,11 @@
         :report="predictionReport"
         :loading="isComputing"
         :errorMessage="predictionError"
+        :paths="predictionPaths"
+        :radar="predictionRadar"
+        :narrative="predictionNarrative"
         @trigger-predict="fetchPrediction"
+        @override-predict="(t) => fetchPrediction(currentMatch?.id || '', t)"
       />
       <CalibrationPanel />
     </div>
@@ -25,6 +29,9 @@ import type { Match, SimulationReport } from './types';
 
 const currentMatch = ref<Match | null>(null);
 const predictionReport = ref<SimulationReport | null>(null);
+const predictionPaths = ref<any>(null);
+const predictionRadar = ref<any>(null);
+const predictionNarrative = ref<string>('');
 const isComputing = ref(false);
 const predictionError = ref<string | null>(null);
 
@@ -34,17 +41,22 @@ function handleMatchSelect(match: Match) {
   predictionError.value = null;
 }
 
-async function fetchPrediction(matchId: string) {
+async function fetchPrediction(matchId: string, tweaks?: any) {
   if (!matchId) return;
   isComputing.value = true;
   predictionError.value = null;
   try {
-    const res = await fetch(`/api/predict/${matchId}?t=${Date.now()}`);
-    if (!res.ok) {
-      throw new Error(`API error: ${res.status} ${res.statusText}`);
+    let url = `/api/predict/${matchId}?t=${Date.now()}`;
+    if (tweaks) {
+      url += `&homeMomentum=${tweaks.homeMomentum}&awayFitness=${tweaks.awayFitness}&refereeStrictness=${tweaks.refereeStrictness}`;
     }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
     const data = await res.json();
     predictionReport.value = data.report as SimulationReport;
+    predictionPaths.value = data.paths;
+    predictionRadar.value = data.radar;
+    predictionNarrative.value = data.narrative || '';
   } catch (err) {
     predictionError.value = err instanceof Error
       ? `预测引擎暂时不可用: ${err.message}`

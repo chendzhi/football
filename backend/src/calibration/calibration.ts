@@ -151,12 +151,12 @@ export async function runCalibration(prisma: PrismaClient): Promise<CalibrationR
     homeSamples.map(s => s.actual)
   );
 
-  // Only activate for predictions with ≥20 samples
-  if (records.length >= 20) {
-    setCalibrator(cal);
+  // Only Platt for < 50 samples (Isotonic overfits on small data)
+  setCalibrator(cal);
+  if (records.length >= 50) {
     activeIsotonic = iso;
   }
-  // With <20 samples: calibrator returns identity
+  // With <50 samples: only Platt active, Isotonic = identity
   const calibrated = homeSamples.map(s => ({ pred: cal.calibrate(s.predictedProb), actual: s.actual }));
   const bs = averageBrier(calibrated);
   const ece = computeECE(allSamples);

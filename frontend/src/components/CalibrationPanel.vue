@@ -49,7 +49,7 @@
     <div class="cal-section" v-if="report.modelComparison && report.modelComparison.length > 0">
       <div class="section-title">Model Versions / 模型版本对比</div>
       <div class="version-row header">
-        <span>Version</span><span>Count</span><span>Brier</span><span>Accuracy</span>
+        <span>版本</span><span>场次</span><span>Brier</span><span>准确率</span>
       </div>
       <div class="version-row" v-for="mv in report.modelComparison" :key="mv.modelVersion">
         <span>{{ mv.modelVersion }}</span>
@@ -60,8 +60,8 @@
     </div>
 
     <div class="cal-footer">
-      <button class="refresh-btn" @click="load">🔄 Refresh</button>
-      <span class="last-update">Last: {{ lastUpdate }}</span>
+      <button class="refresh-btn" @click="load">🔄 刷新</button>
+      <span class="last-update">更新: {{ lastUpdate }}</span>
     </div>
   </div>
 </template>
@@ -83,11 +83,11 @@ const summary = computed(() => {
   if (!report.value) return [];
   const s = report.value.stats;
   return [
-    { label: 'Total', value: String(s.total), color: '' },
-    { label: 'Brier', value: s.brier.toFixed(3), color: s.brier < 0.5 ? 'green' : 'yellow' },
-    { label: 'Accuracy', value: (s.accuracy * 100).toFixed(1) + '%', color: '' },
-    { label: 'ROI', value: (s.roi * 100).toFixed(1) + '%', color: s.roi > 0 ? 'green' : 'red' },
-    { label: 'P/L', value: (s.profit > 0 ? '+' : '') + s.profit.toFixed(1) + 'u', color: s.profit > 0 ? 'green' : 'red' },
+    { label: 'Total 样本', value: String(s.total) + ' 场', color: '' },
+    { label: 'Brier 布氏', value: s.brier.toFixed(3), color: s.brier < 0.3 ? 'green' : s.brier < 0.5 ? 'yellow' : 'red' },
+    { label: 'Accuracy 准确率', value: (s.accuracy * 100).toFixed(1) + '%', color: '' },
+    { label: 'ROI 回报率', value: (s.roi * 100).toFixed(1) + '%', color: s.roi > 0 ? 'green' : 'red' },
+    { label: 'P/L 盈亏', value: (s.profit > 0 ? '+' : '') + s.profit.toFixed(1) + 'u', color: s.profit > 0 ? 'green' : 'red' },
   ];
 });
 
@@ -124,7 +124,7 @@ onMounted(load);
 /* Summary */
 .cal-summary { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
 .stat { background: rgba(20,28,48,0.8); border-radius: 10px; padding: 10px 14px; text-align: center; min-width: 70px; }
-.stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
+.stat-label { font-size: 11px; color: #64748b; }
 .stat-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
 .stat-value.green { color: #22c55e; }
 .stat-value.red { color: #ef4444; }
