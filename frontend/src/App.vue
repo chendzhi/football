@@ -16,7 +16,7 @@
         @override-predict="(t) => fetchPrediction(currentMatch?.id || '', t)"
         @load-explain="fetchExplain"
       />
-      <CalibrationPanel :matchId="currentMatch?.id" />
+      <CalibrationPanel />
     </div>
     <div class="right-panel">
       <RightPanel @select-match="handleMatchSelect" />

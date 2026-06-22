@@ -82,9 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
-
-const { matchId } = defineProps<{ matchId?: string }>();
+import { ref, computed, onMounted } from 'vue';
 
 interface BacktestReport {
   stats: { total: number; brier: number; logLoss: number; accuracy: number; roi: number; profit: number };
@@ -102,7 +100,7 @@ const summary = computed(() => {
   if (!report.value) return [];
   const s = report.value.stats;
   return [
-    { label: matchId ? '本场预测' : 'Total 样本', value: String(s.total) + ' 场', color: '' },
+    { label: 'Total 样本', value: String(s.total) + ' 场', color: '' },
     { label: 'Brier 布氏', value: s.brier.toFixed(3), color: s.brier < 0.3 ? 'green' : s.brier < 0.5 ? 'yellow' : 'red' },
     { label: 'Accuracy 准确率', value: (s.accuracy * 100).toFixed(1) + '%', color: '' },
     { label: 'ROI 回报率', value: (s.roi * 100).toFixed(1) + '%', color: s.roi > 0 ? 'green' : 'red' },
@@ -110,17 +108,15 @@ const summary = computed(() => {
   ];
 });
 
-async function load(matchId?: string) {
+async function load() {
   try {
-    const url = '/api/backtest?t=' + Date.now() + (matchId ? '&matchId=' + matchId : '');
-    const res = await fetch(url);
+    const res = await fetch('/api/backtest?t=' + Date.now());
     report.value = await res.json();
     lastUpdate.value = new Date().toLocaleTimeString();
   } catch { /* backend may not be ready */ }
 }
 
-onMounted(() => load(matchId));
-watch(() => matchId, (id) => load(id));
+onMounted(load);
 </script>
 
 <style scoped>
