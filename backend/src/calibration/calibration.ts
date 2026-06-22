@@ -66,13 +66,15 @@ export class Calibration {
     this.trained = true;
   }
 
-  /** Apply calibration with probability floor */
-  calibrate(p: number): number {
+  /** Apply calibration — constrained within 0.5x~2x raw */
+  calibrate(p: number, rawP?: number): number {
     if (!this.trained) return p;
     const z = this.slope * p + this.intercept;
-    const calibrated = 1 / (1 + Math.exp(-z));
-    // Floor: never go below 2%, never above 98% (unless raw was extreme)
-    return Math.max(0.02, Math.min(0.98, calibrated));
+    let calibrated = 1 / (1 + Math.exp(-z));
+    if (rawP !== undefined && rawP > 0.05) {
+      calibrated = Math.max(rawP * 0.5, Math.min(rawP * 2.0, calibrated));
+    }
+    return Math.max(0.05, Math.min(0.90, calibrated));
   }
 }
 

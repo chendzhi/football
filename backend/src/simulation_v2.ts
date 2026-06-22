@@ -256,19 +256,18 @@ export function calibrateDistribution(
 
   if (outIsos && outCals) {
     calH = outIsos.H.calibrate(rawH);
-    if (calH === rawH) calH = outCals.H.calibrate(rawH);
+    if (calH === rawH) calH = outCals.H.calibrate(rawH, rawH);
     calD = outIsos.D.calibrate(rawD);
-    if (calD === rawD) calD = outCals.D.calibrate(rawD);
+    if (calD === rawD) calD = outCals.D.calibrate(rawD, rawD);
     calA = outIsos.A.calibrate(rawA);
-    if (calA === rawA) calA = outCals.A.calibrate(rawA);
+    if (calA === rawA) calA = outCals.A.calibrate(rawA, rawA);
   } else {
-    // Fallback: single calibrator for all (legacy)
     calH = fallbackIso.calibrate(rawH);
-    if (calH === rawH) calH = fallbackCal.calibrate(rawH);
+    if (calH === rawH) calH = fallbackCal.calibrate(rawH, rawH);
     calD = fallbackIso.calibrate(rawD);
-    if (calD === rawD) calD = fallbackCal.calibrate(rawD);
+    if (calD === rawD) calD = fallbackCal.calibrate(rawD, rawD);
     calA = fallbackIso.calibrate(rawA);
-    if (calA === rawA) calA = fallbackCal.calibrate(rawA);
+    if (calA === rawA) calA = fallbackCal.calibrate(rawA, rawA);
   }
   // Safety: floor each outcome at 3%, ceiling at 95%, normalize
   calH = Math.max(0.03, Math.min(0.95, calH));
