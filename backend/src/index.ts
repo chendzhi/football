@@ -8,10 +8,12 @@ import trainRouter from './routes/train';
 import backtestRouter from './routes/backtest';
 import dataSyncRouter from './routes/dataSync';
 import adminRouter from './routes/admin';
+import explainRouter from './routes/explain';
+import driftRouter from './routes/drift';
 
 const app = express();
 const port = 3000;
-const SYNC_INTERVAL_MIN = 30;
+const SYNC_INTERVAL_MIN = 5;
 
 app.use(express.json());
 app.use((_req, res, next) => {
@@ -26,6 +28,8 @@ app.use('/api', trainRouter);
 app.use('/api', backtestRouter);
 app.use('/api', dataSyncRouter);
 app.use('/api', adminRouter);
+app.use('/api', explainRouter);
+app.use('/api', driftRouter);
 
 // Manual trigger endpoint
 app.post('/api/sync', async (_req, res) => {
@@ -39,17 +43,9 @@ app.get('/api/sync/status', (_req, res) => {
   res.json({ intervalMin: SYNC_INTERVAL_MIN, message: `Auto-sync every ${SYNC_INTERVAL_MIN} min` });
 });
 
-app.listen(port, async () => {
+app.listen(port, () => {
   console.log(`>> [BACKEND] API listening on http://localhost:${port}`);
   console.log(`>> [AUTO-SYNC] every ${SYNC_INTERVAL_MIN} min | POST /api/sync to trigger`);
-
-  // Initial sync
-  try {
-    const log = await autoSync(prisma);
-    console.log('>> [AUTO-SYNC] initial:', log.split('\n')[0]);
-  } catch (e: any) {
-    console.log('>> [AUTO-SYNC] initial failed:', e.message);
-  }
 
   // Recurring sync
   setInterval(async () => {

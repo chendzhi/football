@@ -130,6 +130,14 @@ model FeatureSnapshot {
   oddsDelta        Float
   homeLambda       Float
   awayLambda       Float
+  homeElo          Float?
+  awayElo          Float?
+  homeXG           Float?
+  awayXG           Float?
+  homeXGA          Float?
+  awayXGA          Float?
+  homeForm         Float?
+  awayForm         Float?
   featureVersion   String
   modelVersion     String
   createdAt        DateTime @default(now())

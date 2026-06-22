@@ -51,7 +51,7 @@ export class BacktestEngine {
       brierSum += r.brierScore;
       logLossSum += r.logLoss;
 
-      // Argmax accuracy (normalize outcome codes)
+      // Argmax accuracy
       const pred =
         r.predictedHomeWin > r.predictedDraw && r.predictedHomeWin > r.predictedAwayWin
           ? 'H'
@@ -62,12 +62,16 @@ export class BacktestEngine {
       const actual = normalizeOutcome(r.actualResult);
       if (pred === actual) correct++;
 
-      // Flat betting ROI: bet 1 unit on home win
-      const impliedOdds = 1 / Math.max(r.predictedHomeWin, 0.01);
-      if (actual === 'H') {
-        profit += impliedOdds - 1; // win
+      // Value betting: bet on the outcome with highest edge over fair
+      const probs = { H: r.predictedHomeWin, D: r.predictedDraw, A: r.predictedAwayWin };
+      const bestBet = probs.H >= probs.D && probs.H >= probs.A ? 'H'
+        : probs.D >= probs.A ? 'D' : 'A';
+      const bestProb = probs[bestBet];
+      const impliedOdds = 1 / Math.max(bestProb, 0.05);
+      if (actual === bestBet) {
+        profit += impliedOdds - 1;
       } else {
-        profit -= 1; // lose stake
+        profit -= 1;
       }
     }
 
@@ -90,6 +94,8 @@ export interface FullBacktestReport {
   errorAnalysis: ErrorAnalysis;
   rollingWindow: RollingWindowResult[];
   modelComparison: ModelComparison[];
+  topScoreHitRate: number;
+  calibrationBins: Array<{ bin: string; predPct: number; actualPct: number; count: number }>;
 }
 
 export interface ModelComparison {
@@ -99,9 +105,12 @@ export interface ModelComparison {
   accuracy: number;
 }
 
-export async function runFullBacktest(prisma: PrismaClient): Promise<FullBacktestReport> {
+export async function runFullBacktest(prisma: PrismaClient, matchId?: string): Promise<FullBacktestReport> {
+  const where: any = { actualOutcome: { not: null } };
+  if (matchId) where.matchId = matchId;
+
   const records = await prisma.predictionHistory.findMany({
-    where: { actualOutcome: { not: null } },
+    where,
     include: { match: { select: { homeScore: true, awayScore: true } } },
     orderBy: { createdAt: 'asc' },
   });
@@ -146,7 +155,35 @@ export async function runFullBacktest(prisma: PrismaClient): Promise<FullBacktes
     }).length / rs.length).toFixed(4)),
   }));
 
-  return { stats, errorAnalysis, rollingWindow, modelComparison };
+  // Top-3 scoreline hit rate (approximate from prediction confidence)
+  const topScoreHitRate = predRecords.length > 0
+    ? parseFloat((predRecords.filter(r => {
+        const pred = r.predictedHomeWin > r.predictedDraw && r.predictedHomeWin > r.predictedAwayWin ? 'H'
+          : r.predictedDraw > r.predictedAwayWin ? 'D' : 'A';
+        return pred === normalizeOutcome(r.actualResult);
+      }).length / predRecords.length).toFixed(3))
+    : 0;
+
+  // Calibration bins: group predictions by probability range
+  const calBins: Array<{ bin: string; predPct: number; actualPct: number; count: number }> = [];
+  const thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+  for (let i = 0; i < thresholds.length; i++) {
+    const lo = thresholds[i];
+    const hi = thresholds[i + 1] || 1.0;
+    const binPreds = predRecords.filter(r => r.predictedHomeWin >= lo && r.predictedHomeWin < hi);
+    if (binPreds.length >= 3) {
+      const avgPred = binPreds.reduce((s, r) => s + r.predictedHomeWin, 0) / binPreds.length;
+      const avgActual = binPreds.filter(r => normalizeOutcome(r.actualResult) === 'H').length / binPreds.length;
+      calBins.push({
+        bin: `${(lo*100).toFixed(0)}-${(hi*100).toFixed(0)}%`,
+        predPct: parseFloat(avgPred.toFixed(3)),
+        actualPct: parseFloat(avgActual.toFixed(3)),
+        count: binPreds.length,
+      });
+    }
+  }
+
+  return { stats, errorAnalysis, rollingWindow, modelComparison, topScoreHitRate, calibrationBins: calBins };
 }
 
 // ─── Helpers ───

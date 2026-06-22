@@ -18,24 +18,29 @@ export interface TrainingSample {
  * Uses TeamStats for xG/xGA/form data.
  */
 export async function buildTrainingDataset(prisma: PrismaClient): Promise<TrainingSample[]> {
+  // Lightweight query — select only needed fields, no nested includes
   const completed = await prisma.match.findMany({
-    where: { status: 'completed', homeScore: { not: null }, awayScore: { not: null } },
-    include: {
-      homeTeam: true,
-      awayTeam: true,
-      predictions: { where: { actualOutcome: { not: null } } },
+    where: { status: 'completed', homeScore: { not: null }, awayScore: { not: null }, stage: { not: 'HISTORICAL' } },
+    select: {
+      homeTeamId: true, awayTeamId: true,
+      homeScore: true, awayScore: true,
     },
+    take: 500, // Cap to prevent overflow
   });
 
   const samples: TrainingSample[] = [];
 
   for (const match of completed) {
-    const homeStats = await prisma.teamStats.findFirst({ where: { teamId: match.homeTeamId } });
-    const awayStats = await prisma.teamStats.findFirst({ where: { teamId: match.awayTeamId } });
+    const [homeTeam, awayTeam, homeStats, awayStats] = await Promise.all([
+      prisma.team.findUnique({ where: { id: match.homeTeamId }, select: { eloRating: true } }),
+      prisma.team.findUnique({ where: { id: match.awayTeamId }, select: { eloRating: true } }),
+      prisma.teamStats.findFirst({ where: { teamId: match.homeTeamId } }),
+      prisma.teamStats.findFirst({ where: { teamId: match.awayTeamId } }),
+    ]);
 
     const features = buildFeatureVector({
-      homeElo: match.homeTeam.eloRating,
-      awayElo: match.awayTeam.eloRating,
+      homeElo: homeTeam?.eloRating ?? 1500,
+      awayElo: awayTeam?.eloRating ?? 1500,
       homeXG: homeStats?.expectedGoalsFor ?? 1.3,
       awayXG: awayStats?.expectedGoalsFor ?? 1.3,
       homeXGA: homeStats?.expectedGoalsAgst ?? 1.2,

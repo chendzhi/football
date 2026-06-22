@@ -9,10 +9,14 @@
         :paths="predictionPaths"
         :radar="predictionRadar"
         :narrative="predictionNarrative"
+        :explainData="explainData"
+        :explainLoading="explainLoading"
+        :simMeta="predictionSimMeta"
         @trigger-predict="fetchPrediction"
         @override-predict="(t) => fetchPrediction(currentMatch?.id || '', t)"
+        @load-explain="fetchExplain"
       />
-      <CalibrationPanel />
+      <CalibrationPanel :matchId="currentMatch?.id" />
     </div>
     <div class="right-panel">
       <RightPanel @select-match="handleMatchSelect" />
@@ -25,15 +29,18 @@ import { ref } from 'vue';
 import LeftPanel from './components/LeftPanel.vue';
 import RightPanel from './components/RightPanel.vue';
 import CalibrationPanel from './components/CalibrationPanel.vue';
-import type { Match, SimulationReport } from './types';
+import type { Match, SimulationReport, ExplainResponse, SimMeta } from './types';
 
 const currentMatch = ref<Match | null>(null);
 const predictionReport = ref<SimulationReport | null>(null);
 const predictionPaths = ref<any>(null);
 const predictionRadar = ref<any>(null);
 const predictionNarrative = ref<string>('');
+const predictionSimMeta = ref<SimMeta | null>(null);
 const isComputing = ref(false);
 const predictionError = ref<string | null>(null);
+const explainData = ref<ExplainResponse | null>(null);
+const explainLoading = ref(false);
 
 function handleMatchSelect(match: Match) {
   currentMatch.value = match;
@@ -57,6 +64,8 @@ async function fetchPrediction(matchId: string, tweaks?: any) {
     predictionPaths.value = data.paths;
     predictionRadar.value = data.radar;
     predictionNarrative.value = data.narrative || '';
+    predictionSimMeta.value = data.simMeta as SimMeta || null;
+    fetchExplain(matchId);
   } catch (err) {
     predictionError.value = err instanceof Error
       ? `预测引擎暂时不可用: ${err.message}`
@@ -64,6 +73,23 @@ async function fetchPrediction(matchId: string, tweaks?: any) {
     predictionReport.value = null;
   } finally {
     isComputing.value = false;
+  }
+}
+
+async function fetchExplain(matchId: string) {
+  if (!matchId) return;
+  explainLoading.value = true;
+  try {
+    const res = await fetch(`/api/explain/${matchId}`);
+    if (res.ok) {
+      explainData.value = await res.json();
+    } else {
+      explainData.value = null;
+    }
+  } catch (err) {
+    explainData.value = null;
+  } finally {
+    explainLoading.value = false;
   }
 }
 </script>

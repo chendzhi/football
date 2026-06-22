@@ -9,6 +9,7 @@
     "sync-live": "ts-node src/sync-live.ts",
     "sync-watch": "node -e \"setInterval(()=>{require('child_process').execSync('npx ts-node src/sync-live.ts',{stdio:'inherit'})},3600000)\"",
     "sync": "ts-node -r dotenv/config src/sync.ts",
+    "sync-scores": "ts-node src/sync-scores.ts",
     "enrich": "ts-node -r dotenv/config src/enrich.ts"
   },
   "dependencies": {

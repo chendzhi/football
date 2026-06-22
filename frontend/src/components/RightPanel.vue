@@ -18,14 +18,11 @@
     <!-- Matches Grouped by Date -->
     <div class="match-list">
       <template v-for="group in groupedMatches" :key="group.name">
-        <!-- Date Header -->
         <div class="date-header">
           <span class="date-icon">📅</span>
           <span class="date-text">{{ formatDateHeader(group.name) }}</span>
           <span class="date-count">{{ group.matches.length }} matches</span>
         </div>
-
-        <!-- Match Cards -->
         <div
           v-for="match in group.matches"
           :key="match.id"

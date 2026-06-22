@@ -79,11 +79,18 @@ let activeCalibrator = new Calibration();
 let activeIsotonic = new IsotonicRegression();
 let perScoreCalibrator = new PerScoreCalibrator();
 
+// Per-outcome calibrators (H/D/A independent)
+let outcomeCalibrators: { H: Calibration; D: Calibration; A: Calibration } | null = null;
+let outcomeIsotonics: { H: IsotonicRegression; D: IsotonicRegression; A: IsotonicRegression } | null = null;
+
 export function getCalibrator(): Calibration { return activeCalibrator; }
 export function setCalibrator(c: Calibration) { activeCalibrator = c; }
 
 export function getIsotonic(): IsotonicRegression { return activeIsotonic; }
 export function getPerScoreCalibrator(): PerScoreCalibrator { return perScoreCalibrator; }
+
+export function getOutcomeCalibrators() { return outcomeCalibrators; }
+export function getOutcomeIsotonics() { return outcomeIsotonics; }
 
 // ─── Calibration Report ───
 
@@ -94,6 +101,8 @@ export interface CalibrationReport {
   brierScore: number;
   reliabilityCurve: ReliabilityBin[];
   samplesUsed: number;
+  outcomeSlopes: { H: number; D: number; A: number };
+  outcomeIntercepts: { H: number; D: number; A: number };
 }
 
 /**
@@ -113,35 +122,41 @@ export async function runCalibration(prisma: PrismaClient): Promise<CalibrationR
     return {
       slope: 1, intercept: 0, ece: 0, brierScore: 0,
       reliabilityCurve: [], samplesUsed: 0,
+      outcomeSlopes: { H: 1, D: 1, A: 1 },
+      outcomeIntercepts: { H: 0, D: 0, A: 0 },
     };
   }
 
-  // Build per-outcome samples
+  // Build per-outcome samples (H/D/A independent)
   const homeSamples: MatchResult[] = [];
+  const drawSamples: MatchResult[] = [];
+  const awaySamples: MatchResult[] = [];
   const allSamples: Sample[] = [];
 
   for (const r of records) {
     const actual = r.actualOutcome!;
-    homeSamples.push({
-      predictedProb: r.predHomeWin,
-      actual: actual === 'H' ? 1 : 0,
-    });
-    allSamples.push({
-      predicted: r.predHomeWin,
-      actual: actual === 'H' ? 1 : 0,
-    });
+    homeSamples.push({ predictedProb: r.predHomeWin, actual: actual === 'H' ? 1 : 0 });
+    drawSamples.push({ predictedProb: r.predDraw,    actual: actual === 'D' ? 1 : 0 });
+    awaySamples.push({ predictedProb: r.predAwayWin, actual: actual === 'A' ? 1 : 0 });
+    allSamples.push({ predicted: r.predHomeWin, actual: actual === 'H' ? 1 : 0 });
   }
 
-  // Fit Platt Scaling
-  const cal = new Calibration();
-  cal.fit(homeSamples, 0.01, 200);
+  // Fit THREE separate Platt calibrators (H/D/A)
+  const calH = new Calibration(); calH.fit(homeSamples, 0.01, 200);
+  const calD = new Calibration(); calD.fit(drawSamples, 0.01, 200);
+  const calA = new Calibration(); calA.fit(awaySamples, 0.01, 200);
 
-  // Fit Isotonic Regression
-  const iso = new IsotonicRegression();
-  iso.fit(
-    homeSamples.map(s => s.predictedProb),
-    homeSamples.map(s => s.actual)
-  );
+  // Fit THREE separate Isotonic regressions
+  const isoH = new IsotonicRegression(); const isoD = new IsotonicRegression(); const isoA = new IsotonicRegression();
+  isoH.fit(homeSamples.map(s => s.predictedProb), homeSamples.map(s => s.actual));
+  isoD.fit(drawSamples.map(s => s.predictedProb), drawSamples.map(s => s.actual));
+  isoA.fit(awaySamples.map(s => s.predictedProb), awaySamples.map(s => s.actual));
+
+  // Store per-outcome calibrators
+  outcomeCalibrators = { H: calH, D: calD, A: calA };
+  if (records.length >= 50) {
+    outcomeIsotonics = { H: isoH, D: isoD, A: isoA };
+  }
 
   // Per-score calibration (home win + over 2.5)
   perScoreCalibrator = new PerScoreCalibrator();
@@ -151,23 +166,32 @@ export async function runCalibration(prisma: PrismaClient): Promise<CalibrationR
     homeSamples.map(s => s.actual)
   );
 
-  // Only Platt for < 50 samples (Isotonic overfits on small data)
-  setCalibrator(cal);
+  // Legacy: keep single calibrator for backward compat
+  setCalibrator(calH);
   if (records.length >= 50) {
-    activeIsotonic = iso;
+    activeIsotonic = isoH;
   }
-  // With <50 samples: only Platt active, Isotonic = identity
-  const calibrated = homeSamples.map(s => ({ pred: cal.calibrate(s.predictedProb), actual: s.actual }));
+  const calibrated = homeSamples.map(s => ({ pred: calH.calibrate(s.predictedProb), actual: s.actual }));
   const bs = averageBrier(calibrated);
   const ece = computeECE(allSamples);
   const curve = buildReliability(allSamples);
 
   return {
-    slope: parseFloat(cal.slope.toFixed(4)),
-    intercept: parseFloat(cal.intercept.toFixed(4)),
+    slope: parseFloat(calH.slope.toFixed(4)),
+    intercept: parseFloat(calH.intercept.toFixed(4)),
     ece,
     brierScore: parseFloat(bs.toFixed(4)),
     reliabilityCurve: curve,
     samplesUsed: records.length,
+    outcomeSlopes: {
+      H: parseFloat(calH.slope.toFixed(4)),
+      D: parseFloat(calD.slope.toFixed(4)),
+      A: parseFloat(calA.slope.toFixed(4)),
+    },
+    outcomeIntercepts: {
+      H: parseFloat(calH.intercept.toFixed(4)),
+      D: parseFloat(calD.intercept.toFixed(4)),
+      A: parseFloat(calA.intercept.toFixed(4)),
+    },
   };
 }

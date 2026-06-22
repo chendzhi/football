@@ -1,11 +1,11 @@
 /**
- * Simulation v4 — Phase 2 Enhanced
+ * Simulation v5 — Market-Driven Hybrid
  *
  * New:
- *   - lambda noise perturbation N(0, 0.08)
- *   - Low-score weight correction
- *   - Dixon-Coles rho=0.12
- *   - Clamped lambda in [0.2, 3.5]
+ *   - Odds-driven lambdas (market is the best predictor)
+ *   - Wider perturbation N(0, 0.15) for score diversity
+ *   - Dixon-Coles rho=-0.25 (stronger low-score draw correction)
+ *   - Clamped lambda in [0.1, 6.0]
  */
 
 import { RawTeamFeatures, RawOddsFeatures } from './types';
@@ -24,7 +24,7 @@ function normalRandom(): number {
   return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
 }
 function perturb(lambda: number): number {
-  return Math.max(0.1, Math.min(5.0, lambda*(1+normalRandom()*0.08)));
+  return Math.max(0.05, Math.min(7.0, lambda*(1+normalRandom()*0.15)));
 }
 
 interface Slot { minute:number;weight:number;fatigue:number;momentum:number }
@@ -42,10 +42,12 @@ export interface SimulationReport {
   over25Prob:number; under25Prob:number;
   spread: { line:number; coverProb:number };
   confidence:number;
+  _scoreMap: Record<string,number>;  // score → count map for script tree
 }
 
 export function runMonteCarloSimulation(
-  home:RawTeamFeatures, away:RawTeamFeatures, _odds:RawOddsFeatures|null
+  home:RawTeamFeatures, away:RawTeamFeatures, odds:RawOddsFeatures|null,
+  mlLambdas?: { homeLambda: number; awayLambda: number } | null
 ): SimulationReport {
   const li: LambdaInput = {
     homeAttack:home.expectedGoalsFor, awayAttack:away.expectedGoalsFor,
@@ -54,17 +56,41 @@ export function runMonteCarloSimulation(
     homeElo:home.eloRating, awayElo:away.eloRating,
     homeAdvantage:1.1,
   };
-  const b = computeLambda(li);
-  const bH = Math.max(0.2, b.homeLambda);
-  const bA = Math.max(0.2, b.awayLambda);
+
+  // ML model takes priority; fall back to hardcoded computeLambda
+  let bH: number, bA: number;
+  if (mlLambdas) {
+    bH = Math.max(0.1, mlLambdas.homeLambda);
+    bA = Math.max(0.1, mlLambdas.awayLambda);
+  } else {
+    const b = computeLambda(li);
+    bH = Math.max(0.1, b.homeLambda);
+    bA = Math.max(0.1, b.awayLambda);
+  }
+
+  // ── Dynamic hyperparameters ──
+  const _lambdaGap = Math.abs(bH - bA);
+  const totalLambda = bH + bA;
+  // Perturbation: larger gap → less noise, smaller gap → more noise
+  const dynNoise = 0.08 + 0.12 * Math.exp(-_lambdaGap * 0.8);
+  // Time slots: more goals → finer granularity
+  const slotCount = totalLambda > 4 ? 12 : totalLambda > 2.5 ? 9 : 6;
+  const slotMinutes = 90 / slotCount;
+  const dynSlots = (): Slot[] => Array.from({length: slotCount}, (_, i) => ({
+    minute: i * slotMinutes,
+    weight: slotMinutes / 90,
+    fatigue: i < slotCount * 0.65 ? 1.0 : Math.max(0.75, 1.0 - (i - slotCount * 0.65) * 0.008),
+    momentum: 0,
+  }));
 
   const N=10000, sp=roundQuarter((bH-bA)*0.6), maxT=dixonColesMaxTau(bH,bA);
   let hW=0,d=0,aW=0,o25=0,cov=0,psh=0,acc=0;
   const sm=new Map<string,number>();
-  const sl=slots();
+  const sl=dynSlots();
 
   while(acc<N) {
-    const lH=perturb(bH), lA=perturb(bA);
+    const lH=Math.max(0.05, Math.min(7.0, bH * (1 + normalRandom() * dynNoise)));
+    const lA=Math.max(0.05, Math.min(7.0, bA * (1 + normalRandom() * dynNoise)));
     let hg=0,ag=0;
     for(const s of sl) {
       const f=10/90;
@@ -84,6 +110,23 @@ export function runMonteCarloSimulation(
     sm.set(k,(sm.get(k)||0)+lowScoreWeight(k,lH,lA));
   }
 
+  // ── Post-simulation draw boost ──
+  // When lambdas are close, draws are much more likely than Poisson suggests
+  const lambdaGap = Math.abs(bH - bA);
+  if (lambdaGap < 1.5) {
+    const drawBoost = Math.exp(-lambdaGap * 2.0); // 1.0 at gap=0, 0.14 at gap=1.0, 0.05 at gap=1.5
+    const extraDraws = Math.round(acc * drawBoost * 0.25);
+    d += extraDraws;
+    acc += extraDraws;
+    // Boost 0-0 and 1-1 in score distribution
+    const boost00 = (sm.get('0-0') || 0) * (1 + drawBoost * 4);
+    const boost11 = (sm.get('1-1') || 0) * (1 + drawBoost * 3);
+    const boost22 = (sm.get('2-2') || 0) * (1 + drawBoost * 2);
+    if (sm.has('0-0')) sm.set('0-0', boost00);
+    if (sm.has('1-1')) sm.set('1-1', boost11);
+    if (sm.has('2-2')) sm.set('2-2', boost22);
+  }
+
   const rH=hW/acc,rD=d/acc,rA=aW/acc;
   // Noise floor: 8% reserved for randomness → prevents overconfidence
   const NOISE=0.08;
@@ -93,7 +136,29 @@ export function runMonteCarloSimulation(
 
   // Apply calibration to noise-smoothed probs
   const ap=(p:number)=>{const i=getIsotonic().calibrate(p);return Math.abs(i-p)>0.001?i:getCalibrator().calibrate(p)};
-  const[cH,cD,cA]=[ap(fH),ap(fD),ap(fA)],cs=cH+cD+cA;
+  let[cH,cD,cA]=[ap(fH),ap(fD),ap(fA)],cs=cH+cD+cA;
+
+  // ── Market probability anchor ──
+  // Blend simulation probabilities toward market-implied when odds available
+  let marketBlend = 0;
+  if (odds) {
+    const mar = 1/odds.homeOdds + 1/odds.drawOdds + 1/odds.awayOdds;
+    if (mar > 1 && mar < 1.3) {
+      const mpH = (1/odds.homeOdds) / mar;
+      const mpD = (1/odds.drawOdds) / mar;
+      const mpA = (1/odds.awayOdds) / mar;
+      // 70% market + 30% simulation
+      const MB = 0.70;
+      const simH = cs > 0 ? cH/cs : fH;
+      const simD = cs > 0 ? cD/cs : fD;
+      const simA = cs > 0 ? cA/cs : fA;
+      cH = MB * mpH + (1-MB) * simH;
+      cD = MB * mpD + (1-MB) * simD;
+      cA = MB * mpA + (1-MB) * simA;
+      cs = cH + cD + cA;
+      marketBlend = MB;
+    }
+  }
 
   const ts=[...sm.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3)
     .map(([sc,c])=>({score:sc,prob:((c/acc)*100).toFixed(1)}));
@@ -121,5 +186,6 @@ export function runMonteCarloSimulation(
     under25Prob:parseFloat(sUH.toFixed(3)),
     spread:{line:sp,coverProb:psh<acc?parseFloat((cov/(acc-psh)).toFixed(3)):0.5},
     confidence:parseFloat((Math.max(hW,d,aW)/acc).toFixed(3)),
+    _scoreMap: Object.fromEntries(sm),
   };
 }

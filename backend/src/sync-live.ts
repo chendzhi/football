@@ -29,7 +29,7 @@ const NAME_MAP: Record<string, string> = {
 };
 
 function fetchSporttery(): any {
-  const cmd = `curl -s "${API_URL}" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -H "Referer: https://www.sporttery.cn/jc/zqszsc/" --max-time 15`;
+  const cmd = `curl -s "${API_URL}" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" -H "Accept: application/json, text/plain, */*" -H "Referer: https://www.sporttery.cn/jc/zqszsc/" -H "Origin: https://www.sporttery.cn" -H "Accept-Language: zh-CN,zh;q=0.9" --max-time 15`;
   const raw = execSync(cmd, { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 });
   return JSON.parse(raw);
 }
@@ -66,10 +66,11 @@ async function sync() {
       }
 
       // Find match by teams + date
-      const matchDate = `${m.matchDate}T${m.matchTime || '00:00:00'}`;
-      // sporttery time is Beijing → convert to UTC
-      const bjDate = new Date(matchDate);
-      const utcDate = new Date(bjDate.getTime() - 8 * 3600 * 1000);
+      // sporttery time is Beijing (UTC+8) → convert to UTC explicitly
+      const [y, mo, d] = m.matchDate.split('-').map(Number);
+      const timeParts = (m.matchTime || '00:00').split(':').map(Number);
+      const h = timeParts[0] || 0, mi = timeParts[1] || 0;
+      const utcDate = new Date(Date.UTC(y, mo - 1, d, h - 8, mi, 0));
 
       // Find existing match
       let match = await prisma.match.findFirst({
@@ -137,19 +138,22 @@ async function sync() {
                 simulationVersion: 'simulation_v1.0',
               },
             });
+            // Backfill actualOutcome for ALL real model predictions
+            await prisma.predictionHistory.updateMany({
+              where: { matchId: match.id, actualOutcome: null },
+              data: { actualOutcome: outcome },
+            });
             console.log(`  ⚽ ${homeCn} ${hs}-${as} ${awayCn}`);
           }
         }
       }
 
-      // Update odds (SPF = 胜平负赔率)
-      const spf = m.spfSp || '';
-      if (spf && spf !== '-' && spf.includes(' ')) {
-        const parts = spf.split(' ');
-        if (parts.length >= 3) {
-          const ho = parseFloat(parts[0]);
-          const d = parseFloat(parts[1]);
-          const ao = parseFloat(parts[2]);
+      // Update HAD odds (胜平负) from oddsList
+      const hadOdds = (m.oddsList || []).find((o: any) => o.poolCode === 'HAD');
+      if (hadOdds && hadOdds.h && hadOdds.d && hadOdds.a) {
+          const ho = parseFloat(hadOdds.h);
+          const d = parseFloat(hadOdds.d);
+          const ao = parseFloat(hadOdds.a);
           if (!isNaN(ho)) {
             await prisma.odds.upsert({
               where: { id: `live_o_${match.id}` },
@@ -158,24 +162,20 @@ async function sync() {
             });
             oddsUpdates++;
           }
-        }
       }
 
-      // Record OddsSnapshot for time-series
-      const spfSnapshot = m.spfSp || '';
-      if (spfSnapshot && spfSnapshot !== '-' && spfSnapshot.includes(' ')) {
-        const p = spfSnapshot.split(' ');
-        if (p.length >= 3) {
+      // Record OddsSnapshot for time-series (from oddsList HAD)
+      const hadSnapshot = (m.oddsList || []).find((o: any) => o.poolCode === 'HAD');
+      if (hadSnapshot && hadSnapshot.h && hadSnapshot.d && hadSnapshot.a) {
           await prisma.oddsSnapshot.create({
             data: {
               matchId: match.id,
-              homeOdds: parseFloat(p[0]),
-              drawOdds: parseFloat(p[1]),
-              awayOdds: parseFloat(p[2]),
+              homeOdds: parseFloat(hadSnapshot.h),
+              drawOdds: parseFloat(hadSnapshot.d),
+              awayOdds: parseFloat(hadSnapshot.a),
               source: 'sporttery',
             },
           });
-        }
       }
     }
   }

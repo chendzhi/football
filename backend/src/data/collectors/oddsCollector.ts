@@ -11,8 +11,11 @@ import { PrismaClient } from '@prisma/client';
 const API = 'https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001';
 
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
   'Referer': 'https://www.sporttery.cn/jc/zqszsc/',
+  'Origin': 'https://www.sporttery.cn',
+  'Accept-Language': 'zh-CN,zh;q=0.9',
 };
 
 interface SportteryMatch {
@@ -23,10 +26,16 @@ interface SportteryMatch {
   matchTime: string;
   homeScore: string;
   awayScore: string;
-  spfSp: string;          // 胜平负赔率 "1.85 3.40 4.50"
-  rqspfSp: string;        // 让球胜平负赔率
+  oddsList: Array<{ poolCode: string; h: string; d: string; a: string }>;
   goalLine: string;       // 让球数
   matchNumStr: string;
+}
+
+interface SportteryOddsItem {
+  poolCode: string;
+  h: string;
+  d: string;
+  a: string;
 }
 
 export async function collectOdds(prisma: PrismaClient): Promise<number> {
@@ -46,12 +55,12 @@ export async function collectOdds(prisma: PrismaClient): Promise<number> {
       for (const m of day.subMatchList) {
         if (m.leagueAbbName !== '世界杯') continue;
 
-        const spfParts = (m.spfSp || '').split(' ');
-        if (spfParts.length < 3) continue;
+        const hadOdds = (m.oddsList || []).find((o: SportteryOddsItem) => o.poolCode === 'HAD');
+        if (!hadOdds || !hadOdds.h || !hadOdds.d || !hadOdds.a) continue;
 
-        const homeOdds = parseFloat(spfParts[0]);
-        const drawOdds = parseFloat(spfParts[1]);
-        const awayOdds = parseFloat(spfParts[2]);
+        const homeOdds = parseFloat(hadOdds.h);
+        const drawOdds = parseFloat(hadOdds.d);
+        const awayOdds = parseFloat(hadOdds.a);
         if (isNaN(homeOdds)) continue;
 
         // Find match by date + teams

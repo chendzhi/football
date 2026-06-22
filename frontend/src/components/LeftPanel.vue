@@ -99,6 +99,26 @@
         </div>
       </div>
 
+      <!-- Top Scorelines -->
+      <div class="prob-section" v-if="report?.topScores">
+        <div class="section-title">⚽ TOP SCORES / 比分概率 TOP3</div>
+        <div class="score-row-inline">
+          <span class="score-badge" v-for="s in report.topScores.slice(0,3)" :key="s.score">
+            {{ s.score }} <b>{{ s.prob }}%</b>
+          </span>
+        </div>
+      </div>
+
+      <!-- Explain Engine Panel -->
+      <ExplainPanel
+        :explainData="explainData ?? null"
+        :loading="explainLoading ?? false"
+        :homeName="currentMatch?.homeTeam?.shortName || currentMatch?.homeTeam?.name"
+        :awayName="currentMatch?.awayTeam?.shortName || currentMatch?.awayTeam?.name"
+        :matchId="currentMatch?.id"
+        @load-explain="(matchId) => emit('load-explain', matchId)"
+      />
+
       <!-- Prediction Tree (replaces static Top3) -->
       <PredictionTree :paths="paths" />
 
@@ -114,12 +134,24 @@
       </div>
 
       <!-- System Logs -->
-      <div class="terminal-section">
+      <div class="terminal-section" v-if="simMeta">
+        <div class="terminal-title">⚡ SYSTEM TERMINAL LOGS</div>
+        <div class="terminal-body">
+          <div class="log-line">>> [ENGINE] {{ simMeta.engine || 'Poisson Matrix' }}</div>
+          <div class="log-line">>> [λ] 主队 λ = {{ report.lambdas.homeLambda }} | 客队 λ = {{ report.lambdas.awayLambda }} | {{ simMeta.lambdaVersion || '' }}</div>
+          <div class="log-line">>> [SIM] {{ simMeta.correction || 'DC' }} | {{ simMeta.calibration || 'Platt+Isotonic' }} | 市场: {{ simMeta.marketBlend || 'dynamic' }}</div>
+          <div class="log-line" v-if="simMeta.oddsMonitoring?.live">>> [ODDS] 隐含主胜 {{ simMeta.oddsMonitoring.implied }}% | Δ {{ simMeta.oddsMonitoring.delta > 0 ? '+' : '' }}{{ simMeta.oddsMonitoring.delta.toFixed(2) }}% | 波动 {{ simMeta.oddsMonitoring.velocity.toFixed(3) }}/h | 压力 {{ simMeta.oddsMonitoring.pressure > 0 ? '+' : '' }}{{ simMeta.oddsMonitoring.pressure.toFixed(3) }}</div>
+          <div class="log-line" v-else>> [ODDS] 无实时赔率数据</div>
+          <div class="log-line">>> [PERSIST] 特征快照 + 预测记录已持久化 (DB)</div>
+        </div>
+      </div>
+      <!-- Fallback static logs if no simMeta -->
+      <div class="terminal-section" v-else-if="report">
         <div class="terminal-title">⚡ SYSTEM TERMINAL LOGS</div>
         <div class="terminal-body">
           <div class="log-line">>> [LAMBDA] 主队 λ: {{ report.lambdas.homeLambda }} | 客队 λ: {{ report.lambdas.awayLambda }}</div>
-          <div class="log-line">>> [MC] Dixon-Coles (ρ=-0.12) + 时间切片 9×10min + noise floor 8%</div>
-          <div class="log-line">>> [CALIBRATE] Platt + Isotonic 双校准已应用</div>
+          <div class="log-line">>> [MC] Dixon-Coles ρ=-0.25 · 10,000 次 · 9×10min 时间切片</div>
+          <div class="log-line">>> [CALIBRATE] Platt + Isotonic 校准 · 噪声地板 8%</div>
           <div class="log-line">>> [SNAPSHOT] 特征快照 + 预测记录已持久化</div>
         </div>
       </div>
@@ -129,11 +161,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { Match, SimulationReport } from '../types';
+import type { Match, SimulationReport, SimMeta } from '../types';
 import { getChinaName, formatStage } from '../team-names';
 import TacticalRadar from './TacticalRadar.vue';
 import PredictionTree from './PredictionTree.vue';
 import SandboxController from './SandboxController.vue';
+import ExplainPanel from './ExplainPanel.vue';
+import type { ExplainResponse } from '../types';
 
 const props = defineProps<{
   currentMatch: Match | null;
@@ -141,9 +175,16 @@ const props = defineProps<{
   loading: boolean;
   errorMessage: string | null;
   paths?: any; radar?: any; narrative?: string;
+  explainData?: ExplainResponse | null;
+  explainLoading?: boolean;
+  simMeta?: SimMeta | null;
 }>();
 
-const emit = defineEmits<{ 'trigger-predict': [matchId: string]; 'override-predict': [tweaks: any] }>();
+const emit = defineEmits<{
+  'trigger-predict': [matchId: string];
+  'override-predict': [tweaks: any];
+  'load-explain': [matchId: string];
+}>();
 
 const iterations = 10000;
 const isMatchCompleted = computed(() =>
@@ -482,6 +523,20 @@ function onFlagError(e: Event) {
   font-weight: 700;
   font-size: 14px;
 }
+
+/* ── Score badges ── */
+.score-row-inline {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.score-badge {
+  background: rgba(15,23,42,0.8);
+  border: 1px solid rgba(56,189,248,0.2);
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-family: 'Cascadia Code', monospace;
+  font-size: 14px; color: #e2e8f0;
+}
+.score-badge b { color: #38bdf8; margin-left: 6px; }
 
 /* ── Terminal ── */
 .terminal-section {

@@ -5,7 +5,9 @@ const router = Router();
 
 router.get('/matches', async (_req, res) => {
   try {
+    // Only World Cup matches (exclude historical training data)
     const matches = await prisma.match.findMany({
+      where: { stage: { not: 'HISTORICAL' } },
       include: { homeTeam: true, awayTeam: true },
       orderBy: { matchDate: 'asc' }
     });

@@ -9,30 +9,30 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const T: Record<string, [string,string,string,number,number,number,number]> = {
-  mex:['Mexico','墨西哥','MEX',1930,1.7,1.2,0.70],kor:['South Korea','韩国','KOR',1890,1.6,1.3,0.65],
-  cze:['Czechia','捷克','CZE',1860,1.4,1.4,0.62],rsa:['South Africa','南非','RSA',1810,1.2,1.5,0.58],
-  can:['Canada','加拿大','CAN',1880,1.5,1.3,0.65],bih:['Bosnia & Herz.','波黑','BIH',1830,1.3,1.4,0.60],
-  qat:['Qatar','卡塔尔','QAT',1760,1.1,1.6,0.55],sui:['Switzerland','瑞士','SUI',1940,1.5,1.0,0.70],
-  bra:['Brazil','巴西','BRA',2100,2.2,0.8,0.88],mar:['Morocco','摩洛哥','MAR',1970,1.6,0.9,0.80],
-  hai:['Haiti','海地','HAI',1680,0.7,2.0,0.40],sco:['Scotland','苏格兰','SCO',1880,1.3,1.2,0.68],
-  usa:['United States','美国','USA',1960,1.8,1.1,0.75],par:['Paraguay','巴拉圭','PAR',1800,1.1,1.4,0.56],
-  aus:['Australia','澳大利亚','AUS',1830,1.3,1.3,0.62],tur:['Turkiye','土耳其','TUR',1910,1.6,1.2,0.68],
-  ger:['Germany','德国','GER',2040,2.0,1.0,0.78],cuw:['Curacao','库拉索','CUW',1650,0.7,2.1,0.38],
-  civ:["Cote d'Ivoire",'科特迪瓦','CIV',1850,1.4,1.2,0.66],ecu:['Ecuador','厄瓜多尔','ECU',1880,1.3,1.2,0.64],
-  ned:['Netherlands','荷兰','NED',2010,2.0,1.0,0.76],jpn:['Japan','日本','JPN',1950,1.8,1.0,0.82],
-  swe:['Sweden','瑞典','SWE',1900,1.5,1.1,0.66],tun:['Tunisia','突尼斯','TUN',1810,1.1,1.2,0.62],
-  bel:['Belgium','比利时','BEL',2000,1.8,1.1,0.68],egy:['Egypt','埃及','EGY',1840,1.3,1.1,0.68],
-  irn:['Iran','伊朗','IRN',1800,1.2,1.4,0.64],nzl:['New Zealand','新西兰','NZL',1700,0.9,1.8,0.50],
-  esp:['Spain','西班牙','ESP',2090,2.2,0.7,0.88],cpv:['Cape Verde','佛得角','CPV',1720,0.9,1.7,0.50],
-  ksa:['Saudi Arabia','沙特阿拉伯','KSA',1780,1.1,1.5,0.58],uru:['Uruguay','乌拉圭','URU',1980,1.8,1.1,0.72],
-  fra:['France','法国','FRA',2120,2.3,0.8,0.85],sen:['Senegal','塞内加尔','SEN',1920,1.5,1.1,0.70],
-  irq:['Iraq','伊拉克','IRQ',1720,0.8,1.8,0.48],nor:['Norway','挪威','NOR',1950,1.8,1.0,0.74],
-  arg:['Argentina','阿根廷','ARG',2140,2.3,0.7,0.92],alg:['Algeria','阿尔及利亚','ALG',1840,1.3,1.2,0.60],
-  aut:['Austria','奥地利','AUT',1910,1.6,1.2,0.72],jor:['Jordan','约旦','JOR',1730,0.8,1.7,0.52],
-  por:['Portugal','葡萄牙','POR',2050,2.1,0.9,0.80],col:['Colombia','哥伦比亚','COL',1960,1.7,1.0,0.74],
-  cod:['DR Congo','刚果(金)','COD',1730,0.9,1.7,0.50],uzb:['Uzbekistan','乌兹别克斯坦','UZB',1740,0.9,1.6,0.52],
-  eng:['England','英格兰','ENG',2080,2.1,0.8,0.82],cro:['Croatia','克罗地亚','CRO',1990,1.7,1.0,0.73],
-  gha:['Ghana','加纳','GHA',1830,1.3,1.2,0.64],pan:['Panama','巴拿马','PAN',1750,0.9,1.7,0.50],
+  mex:['Mexico','墨西哥','MEX',2113,1.7,1.2,0.70],kor:['South Korea','韩国','KOR',1752,1.6,1.3,0.65],
+  cze:['Czechia','捷克','CZE',1726,1.4,1.4,0.62],rsa:['South Africa','南非','RSA',1400,1.2,1.5,0.58],
+  can:['Canada','加拿大','CAN',1784,1.5,1.3,0.65],bih:['Bosnia & Herz.','波黑','BIH',1594,1.3,1.4,0.60],
+  qat:['Qatar','卡塔尔','QAT',1425,1.1,1.6,0.55],sui:['Switzerland','瑞士','SUI',1889,1.5,1.0,0.70],
+  bra:['Brazil','巴西','BRA',1984,2.2,0.8,0.88],mar:['Morocco','摩洛哥','MAR',1821,1.6,0.9,0.80],
+  hai:['Haiti','海地','HAI',1532,0.7,2.0,0.40],sco:['Scotland','苏格兰','SCO',1767,1.3,1.2,0.68],
+  usa:['United States','美国','USA',1721,1.8,1.1,0.75],par:['Paraguay','巴拉圭','PAR',1833,1.1,1.4,0.56],
+  aus:['Australia','澳大利亚','AUS',1783,1.3,1.3,0.62],tur:['Turkiye','土耳其','TUR',1902,1.6,1.2,0.68],
+  ger:['Germany','德国','GER',1923,2.0,1.0,0.78],cuw:['Curacao','库拉索','CUW',1436,0.7,2.1,0.38],
+  civ:["Cote d'Ivoire",'科特迪瓦','CIV',1850,1.4,1.2,0.66],ecu:['Ecuador','厄瓜多尔','ECU',1933,1.3,1.2,0.64],
+  ned:['Netherlands','荷兰','NED',1961,2.0,1.0,0.76],jpn:['Japan','日本','JPN',1862,1.8,1.0,0.82],
+  swe:['Sweden','瑞典','SWE',1719,1.5,1.1,0.66],tun:['Tunisia','突尼斯','TUN',1636,1.1,1.2,0.62],
+  bel:['Belgium','比利时','BEL',1866,1.8,1.1,0.68],egy:['Egypt','埃及','EGY',1689,1.3,1.1,0.68],
+  irn:['Iran','伊朗','IRN',1760,1.2,1.4,0.64],nzl:['New Zealand','新西兰','NZL',1585,0.9,1.8,0.50],
+  esp:['Spain','西班牙','ESP',2165,2.2,0.7,0.88],cpv:['Cape Verde','佛得角','CPV',1549,0.9,1.7,0.50],
+  ksa:['Saudi Arabia','沙特阿拉伯','KSA',1568,1.1,1.5,0.58],uru:['Uruguay','乌拉圭','URU',1892,1.8,1.1,0.72],
+  fra:['France','法国','FRA',2082,2.3,0.8,0.85],sen:['Senegal','塞内加尔','SEN',1879,1.5,1.1,0.70],
+  irq:['Iraq','伊拉克','IRQ',1607,0.8,1.8,0.48],nor:['Norway','挪威','NOR',1912,1.8,1.0,0.74],
+  arg:['Argentina','阿根廷','ARG',2113,2.3,0.7,0.92],alg:['Algeria','阿尔及利亚','ALG',1743,1.3,1.2,0.60],
+  aut:['Austria','奥地利','AUT',1827,1.6,1.2,0.72],jor:['Jordan','约旦','JOR',1690,0.8,1.7,0.52],
+  por:['Portugal','葡萄牙','POR',1984,2.1,0.9,0.80],col:['Colombia','哥伦比亚','COL',1975,1.7,1.0,0.74],
+  cod:['DR Congo','刚果(金)','COD',1655,0.9,1.7,0.50],uzb:['Uzbekistan','乌兹别克斯坦','UZB',1727,0.9,1.6,0.52],
+  eng:['England','英格兰','ENG',2020,2.1,0.8,0.82],cro:['Croatia','克罗地亚','CRO',1930,1.7,1.0,0.73],
+  gha:['Ghana','加纳','GHA',1505,1.3,1.2,0.64],pan:['Panama','巴拿马','PAN',1733,0.9,1.7,0.50],
 };
 
 type M = [string,string,string,string,string,number?,number?];
@@ -149,7 +149,7 @@ async function main() {
     if(hasResult){
       completed++;
       const out=hs!>as!?'H':hs!<as!?'A':'D';
-      await prisma.predictionHistory.create({data:{id:'ph_'+mid,matchId:mid,teamId:home,predHomeWin:+homeP.toFixed(4),predDraw:+drawP.toFixed(4),predAwayWin:+awayP.toFixed(4),actualOutcome:out,featureVersion:'verified',modelVersion:'v3',simulationVersion:'v4'}});
+      await prisma.predictionHistory.create({data:{id:'ph_'+mid,matchId:mid,teamId:home,predHomeWin:+homeP.toFixed(4),predDraw:+drawP.toFixed(4),predAwayWin:+awayP.toFixed(4),actualOutcome:out,featureVersion:'verified',modelVersion:'seed_elo_v3',simulationVersion:'v4'}});
     }else{scheduled++;}
   }
   console.log(`${completed} completed · ${scheduled} upcoming · Times verified against sporttery.cn`);

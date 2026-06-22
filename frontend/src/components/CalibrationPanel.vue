@@ -45,6 +45,21 @@
       </div>
     </div>
 
+    <!-- Calibration Curve -->
+    <div class="cal-section" v-if="report.calibrationBins && report.calibrationBins.length > 0">
+      <div class="section-title">Calibration Curve / 校准曲线 (Top3 Hit: {{ (report.topScoreHitRate * 100).toFixed(1) }}%)</div>
+      <div class="cal-curve">
+        <div class="curve-row" v-for="b in report.calibrationBins" :key="b.bin">
+          <span class="curve-label">{{ b.bin }}</span>
+          <span class="curve-bar-wrap">
+            <span class="curve-bar-pred" :style="{ width: b.predPct * 100 + '%' }"></span>
+            <span class="curve-dot" :style="{ left: b.actualPct * 100 + '%' }">●</span>
+          </span>
+          <span class="curve-count">n={{ b.count }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Model Versions -->
     <div class="cal-section" v-if="report.modelComparison && report.modelComparison.length > 0">
       <div class="section-title">Model Versions / 模型版本对比</div>
@@ -60,20 +75,24 @@
     </div>
 
     <div class="cal-footer">
-      <button class="refresh-btn" @click="load">🔄 刷新</button>
+      <button class="refresh-btn" @click="() => load(matchId)">🔄 刷新</button>
       <span class="last-update">更新: {{ lastUpdate }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+
+const { matchId } = defineProps<{ matchId?: string }>();
 
 interface BacktestReport {
   stats: { total: number; brier: number; logLoss: number; accuracy: number; roi: number; profit: number };
   errorAnalysis: { buckets: Array<{ bin: string; avgPred: number; avgActual: number; bias: number; count: number }>; summary: string };
   rollingWindow: Array<{ window: number; brier: number; accuracy: number }>;
   modelComparison: Array<{ modelVersion: string; count: number; brier: number; accuracy: number }>;
+  topScoreHitRate: number;
+  calibrationBins: Array<{ bin: string; predPct: number; actualPct: number; count: number }>;
 }
 
 const report = ref<BacktestReport | null>(null);
@@ -83,7 +102,7 @@ const summary = computed(() => {
   if (!report.value) return [];
   const s = report.value.stats;
   return [
-    { label: 'Total 样本', value: String(s.total) + ' 场', color: '' },
+    { label: matchId ? '本场预测' : 'Total 样本', value: String(s.total) + ' 场', color: '' },
     { label: 'Brier 布氏', value: s.brier.toFixed(3), color: s.brier < 0.3 ? 'green' : s.brier < 0.5 ? 'yellow' : 'red' },
     { label: 'Accuracy 准确率', value: (s.accuracy * 100).toFixed(1) + '%', color: '' },
     { label: 'ROI 回报率', value: (s.roi * 100).toFixed(1) + '%', color: s.roi > 0 ? 'green' : 'red' },
@@ -91,15 +110,17 @@ const summary = computed(() => {
   ];
 });
 
-async function load() {
+async function load(matchId?: string) {
   try {
-    const res = await fetch('/api/backtest?t=' + Date.now());
+    const url = '/api/backtest?t=' + Date.now() + (matchId ? '&matchId=' + matchId : '');
+    const res = await fetch(url);
     report.value = await res.json();
     lastUpdate.value = new Date().toLocaleTimeString();
   } catch { /* backend may not be ready */ }
 }
 
-onMounted(load);
+onMounted(() => load(matchId));
+watch(() => matchId, (id) => load(id));
 </script>
 
 <style scoped>
@@ -158,6 +179,15 @@ onMounted(load);
 .version-row { display: flex; gap: 8px; padding: 3px 0; font-size: 11px; }
 .version-row.header { color: #64748b; border-bottom: 1px solid rgba(56,189,248,0.1); margin-bottom: 4px; }
 .version-row span { flex: 1; }
+
+/* Calibration Curve */
+.cal-curve { display: flex; flex-direction: column; gap: 3px; }
+.curve-row { display: flex; align-items: center; gap: 6px; }
+.curve-label { width: 55px; font-size: 10px; color: #64748b; }
+.curve-bar-wrap { flex: 1; height: 10px; background: rgba(30,41,59,0.4); border-radius: 5px; position: relative; overflow: hidden; }
+.curve-bar-pred { height: 100%; background: linear-gradient(90deg, rgba(59,130,246,0.3), rgba(59,130,246,0.6)); border-radius: 5px; }
+.curve-dot { position: absolute; top: -2px; color: #22c55e; font-size: 12px; transform: translateX(-50%); }
+.curve-count { font-size: 9px; color: #475569; width: 25px; }
 
 .cal-footer { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
 .refresh-btn { background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 11px; }
