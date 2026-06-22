@@ -185,10 +185,14 @@ router.get('/predict/:matchId', async (req, res) => {
         },
       });
 
-      // Record for residual learning
+      // Record for residual learning + backfill actualOutcome
       if (match.status === 'completed' && match.homeScore != null) {
         const outcome = match.homeScore > match.awayScore! ? 'H' : match.homeScore < match.awayScore! ? 'A' : 'D';
-        recordPrediction(calibrated.homeWin, calibrated.draw, calibrated.awayWin, outcome);
+        recordPrediction(calibrated.homeWin, calibrated.draw, calibrated.awayWin, outcome as 'H'|'D'|'A');
+        await prisma.predictionHistory.update({
+          where: { id: predictionId },
+          data: { actualOutcome: outcome as string },
+        }).catch(() => {});
       }
 
       // ── Step 11: Response ──
