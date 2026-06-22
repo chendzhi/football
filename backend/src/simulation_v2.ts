@@ -270,8 +270,12 @@ export function calibrateDistribution(
     calA = fallbackIso.calibrate(rawA);
     if (calA === rawA) calA = fallbackCal.calibrate(rawA);
   }
+  // Safety: floor each outcome at 3%, ceiling at 95%, normalize
+  calH = Math.max(0.03, Math.min(0.95, calH));
+  calD = Math.max(0.03, Math.min(0.95, calD));
+  calA = Math.max(0.03, Math.min(0.95, calA));
   const sum = calH + calD + calA;
-  if (sum > 0) { calH /= sum; calD /= sum; calA /= sum; }
+  calH /= sum; calD /= sum; calA /= sum;
 
   // Market blend — 市场信息唯一入口 (single entry, no double-counting)
   let finalH = calH, finalD = calD, finalA = calA;

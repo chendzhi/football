@@ -60,17 +60,19 @@ export class Calibration {
       this.intercept -= (lr / N) * gradIntercept;
     }
 
-    // Clamp to reasonable range
-    this.slope = Math.max(0.1, Math.min(5, this.slope));
-    this.intercept = Math.max(-3, Math.min(3, this.intercept));
+    // Tighter clamp — prevent overfitting on small samples
+    this.slope = Math.max(0.3, Math.min(3.0, this.slope));
+    this.intercept = Math.max(-1.5, Math.min(1.5, this.intercept));
     this.trained = true;
   }
 
-  /** Apply calibration to a raw probability */
+  /** Apply calibration with probability floor */
   calibrate(p: number): number {
-    if (!this.trained) return p;  // identity
+    if (!this.trained) return p;
     const z = this.slope * p + this.intercept;
-    return 1 / (1 + Math.exp(-z));
+    const calibrated = 1 / (1 + Math.exp(-z));
+    // Floor: never go below 2%, never above 98% (unless raw was extreme)
+    return Math.max(0.02, Math.min(0.98, calibrated));
   }
 }
 
