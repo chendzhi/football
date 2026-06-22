@@ -66,15 +66,13 @@ export class Calibration {
     this.trained = true;
   }
 
-  /** Apply calibration — constrained within 0.5x~2x raw */
-  calibrate(p: number, rawP?: number): number {
+  /** Apply calibration — skip if slope is near 1.0 and intercept near 0 (identity) */
+  calibrate(p: number): number {
     if (!this.trained) return p;
+    // If calibration is near-identity, skip to avoid numerical noise
+    if (Math.abs(this.slope - 1.0) < 0.05 && Math.abs(this.intercept) < 0.05) return p;
     const z = this.slope * p + this.intercept;
-    let calibrated = 1 / (1 + Math.exp(-z));
-    if (rawP !== undefined && rawP > 0.05) {
-      calibrated = Math.max(rawP * 0.5, Math.min(rawP * 2.0, calibrated));
-    }
-    return Math.max(0.05, Math.min(0.90, calibrated));
+    return Math.max(0.06, Math.min(0.88, 1 / (1 + Math.exp(-z))));
   }
 }
 

@@ -256,23 +256,23 @@ export function calibrateDistribution(
 
   if (outIsos && outCals) {
     calH = outIsos.H.calibrate(rawH);
-    if (calH === rawH) calH = outCals.H.calibrate(rawH, rawH);
+    if (calH === rawH) calH = outCals.H.calibrate(rawH);
     calD = outIsos.D.calibrate(rawD);
-    if (calD === rawD) calD = outCals.D.calibrate(rawD, rawD);
+    if (calD === rawD) calD = outCals.D.calibrate(rawD);
     calA = outIsos.A.calibrate(rawA);
-    if (calA === rawA) calA = outCals.A.calibrate(rawA, rawA);
+    if (calA === rawA) calA = outCals.A.calibrate(rawA);
   } else {
     calH = fallbackIso.calibrate(rawH);
-    if (calH === rawH) calH = fallbackCal.calibrate(rawH, rawH);
+    if (calH === rawH) calH = fallbackCal.calibrate(rawH);
     calD = fallbackIso.calibrate(rawD);
-    if (calD === rawD) calD = fallbackCal.calibrate(rawD, rawD);
+    if (calD === rawD) calD = fallbackCal.calibrate(rawD);
     calA = fallbackIso.calibrate(rawA);
-    if (calA === rawA) calA = fallbackCal.calibrate(rawA, rawA);
+    if (calA === rawA) calA = fallbackCal.calibrate(rawA);
   }
-  // Safety: floor each outcome at 3%, ceiling at 95%, normalize
-  calH = Math.max(0.03, Math.min(0.95, calH));
-  calD = Math.max(0.03, Math.min(0.95, calD));
-  calA = Math.max(0.03, Math.min(0.95, calA));
+  // Safety: if calibration distorted the distribution, revert to raw
+  if (calH < 0.08 || calH > 0.85 || calD > 0.50 || calA > 0.85) {
+    calH = rawH; calD = rawD; calA = rawA;
+  }
   const sum = calH + calD + calA;
   calH /= sum; calD /= sum; calA /= sum;
 
