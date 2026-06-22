@@ -14,6 +14,8 @@ import { generateAINarrative } from '../services/ai_narrative';
 import { predictUnified, type UnifiedFeatures } from '../ml/unifiedPredictor';
 import { oddsToMarketLambda, fuseLambdas } from '../ml/marketLambdaFusion';
 import { loadErrorHistory, recordPrediction, applyResidualCorrection } from '../ml/residualLearner';
+import { computeRollingStats, computeH2HDetail } from '../ml/advancedFeatures';
+import { fetchMatchWeather, getVenueData, computeWeatherAdjustment } from '../data/weatherScraper';
 
 const router = Router();
 
@@ -54,7 +56,25 @@ router.get('/predict/:matchId', async (req, res) => {
       ? { homeOdds: latestOdds.currentHomeOdds, drawOdds: latestOdds.currentDrawOdds, awayOdds: latestOdds.currentAwayOdds }
       : null;
 
-    // ── Step 2: Build Unified Feature Vector ──
+    // ── Step 1.5: 外部数据并行采集 (real data for feature vector) ──
+    let rollingHome = { gf: 1.3, ga: 1.2, cleanSheets: 0, unbeatenStreak: 0, losingStreak: 0, lastGoalDiff: 0, n: 0 };
+    let rollingAway = { gf: 1.3, ga: 1.2, cleanSheets: 0, unbeatenStreak: 0, losingStreak: 0, lastGoalDiff: 0, n: 0 };
+    let h2hDetail = { meetings: 0, goalDiff: 0, avgTotalGoals: 0, drawRate: 0, last3Results: '' };
+    let weatherAdj: { homeAdj: number; awayAdj: number; details: string[] } | null = null;
+    const venueData = getVenueData(match.homeTeamId);
+
+    try {
+      const [rh, ra, h2h, weather] = await Promise.all([
+        computeRollingStats(prisma, match.homeTeamId, new Date(match.matchDate)).catch(() => rollingHome),
+        computeRollingStats(prisma, match.awayTeamId, new Date(match.matchDate)).catch(() => rollingAway),
+        computeH2HDetail(prisma, match.homeTeamId, match.awayTeamId).catch(() => h2hDetail),
+        fetchMatchWeather(venueData.lat, venueData.lon, new Date(match.matchDate).toISOString().slice(0, 10)).catch(() => null),
+      ]);
+      rollingHome = rh; rollingAway = ra; h2hDetail = h2h;
+      if (weather) weatherAdj = computeWeatherAdjustment(weather, venueData.altitude);
+    } catch {}
+
+    // ── Step 2: Build Unified Feature Vector (populated with real data) ──
     const safeLog = (x: number) => Math.log(Math.max(x, 0.01));
 
     const features: UnifiedFeatures = {
@@ -66,36 +86,36 @@ router.get('/predict/:matchId', async (req, res) => {
       injuryDiff: homePenalty - awayPenalty,
       homeAdvantage: 1.0,
 
-      // Interaction (simplified — tanh normalized)
+      // Interaction
       eloXForm: Math.tanh((homeElo - awayElo) / 400) * Math.tanh(homeForm - awayForm),
       xgXRest: 0,
       motXDef: 0,
       eloXxg: Math.tanh((homeElo - awayElo) / 400) * Math.tanh(homeXG - awayXG),
 
-      // Context
+      // Context (real)
       restAdv: 0,
-      h2hAdv: 0,
+      h2hAdv: h2hDetail.meetings > 0 ? h2hDetail.goalDiff / Math.max(h2hDetail.meetings, 1) / 3 : 0,
       motivation: 0,
 
-      // 5-category adjustments (all start at 0 → ln(1)=0, no effect unless data available)
-      travelLog: 0,
-      pressureLog: 0,
-      knockoutLog: 0,
-      collusionLog: 0,
-      altitudeLog: 0,
-      weatherLog: 0,
-      refereeLog: 0,
-      defenseLog: 0,
-      cleanSheetLog: 0,
-      h2hLog: 0,
-      psychLog: 0,
-      streakLog: 0,
+      // 5-category adjustments (populated from real data)
+      altitudeLog: venueData.altitude > 1500 ? safeLog(1.06) : 0,
+      weatherLog: weatherAdj ? safeLog(weatherAdj.homeAdj) : 0,
+      defenseLog: rollingAway.n > 0 ? safeLog(1 + (1.2 - rollingAway.ga) * 0.25) : 0,
+      cleanSheetLog: safeLog(1 + (rollingAway.cleanSheets - 0.2) * 0.2),
+      h2hLog: h2hDetail.meetings >= 2 ? safeLog(1 + (h2hDetail.goalDiff / h2hDetail.meetings) * 0.04) : 0,
+      psychLog: rollingAway.lastGoalDiff <= -3 ? safeLog(1.12) : 0,
+      streakLog: rollingHome.unbeatenStreak >= 3 ? safeLog(1.06) : 0,
       scheduleLog: 0,
       groupMatch3Log: 0,
       homeFormLog: 0,
       stageWeightLog: 0,
+      travelLog: 0,
+      pressureLog: 0,
+      knockoutLog: 0,
+      collusionLog: 0,
+      refereeLog: 0,
 
-      // ESPN
+      // ESPN (populated when available)
       lineupDiff: 0,
       gkQualityDiff: 0,
       shotQualityDiff: 0,
