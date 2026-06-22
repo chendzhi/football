@@ -128,7 +128,8 @@ router.get('/predict/:matchId', async (req, res) => {
     // ── Step 4: Market fusion (pre-calibration) ──
     let mktWeight = 0;
     const actualHoursToKickoff = Math.max(0, (new Date(match.matchDate).getTime() - Date.now()) / 3600000);
-    if (odds) {
+    if (odds && odds.homeOdds > 1) {
+      console.log('[predict] odds found for', matchId, ':', odds.homeOdds, odds.drawOdds, odds.awayOdds);
       const mktLambda = oddsToMarketLambda(odds.homeOdds, odds.drawOdds, odds.awayOdds, mlResult.homeLambda, mlResult.awayLambda);
       const fused = fuseLambdas(mlResult.homeLambda, mlResult.awayLambda, mktLambda, actualHoursToKickoff, 0);
       mktWeight = fused.marketWeight;
