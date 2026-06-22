@@ -49,7 +49,7 @@ export function oddsToMarketLambda(
   if (homeOdds <= 1 || drawOdds <= 1 || awayOdds <= 1) return null;
 
   const margin = 1 / homeOdds + 1 / drawOdds + 1 / awayOdds;
-  if (margin <= 1 || margin > 1.3) return null;
+  if (margin <= 1 || margin > 1.5) return null;
 
   // 去水 → 公平概率
   const fairH = (1 / homeOdds) / margin;
@@ -101,8 +101,8 @@ export function fuseLambdas(
     };
   }
 
-  // 低流动性 (<0.3): 市场权重趋近 0
-  if (market.liquidity < 0.3) {
+  // 极低流动性 (<0.1): 市场权重趋近 0
+  if (market.liquidity < 0.1) {
     return {
       homeLambda: statHome, awayLambda: statAway,
       statWeight: 1.0, marketWeight: 0,
@@ -124,9 +124,9 @@ export function fuseLambdas(
   // 流动性权重: 基本信任度
   const liquidityWeight = market.liquidity;
 
-  // 综合市场权重: [0.25, 0.75]
+  // 综合市场权重: [0.15, 0.75]
   const rawWeight = liquidityWeight * 0.40 + timeScore * 0.35 + stabilityScore * 0.25;
-  const marketWeight = parseFloat(Math.max(0.25, Math.min(0.75, rawWeight)).toFixed(2));
+  const marketWeight = parseFloat(Math.max(0.15, Math.min(0.75, rawWeight)).toFixed(2));
   const statWeight = parseFloat((1 - marketWeight).toFixed(2));
 
   // 融合 λ: 加权平均
