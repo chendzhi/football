@@ -2,7 +2,7 @@ module.exports = {
   apps: [{
     name: 'football-api',
     cwd: '/www/wwwroot/football/backend',
-    script: 'node_modules/.bin/tsx',
+    script: 'tsx',
     args: 'src/index.ts',
     instances: 1,
     autorestart: true,
