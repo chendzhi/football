@@ -56,7 +56,24 @@ router.get('/predict/:matchId', async (req, res) => {
       ? { homeOdds: latestOdds.currentHomeOdds, drawOdds: latestOdds.currentDrawOdds, awayOdds: latestOdds.currentAwayOdds }
       : null;
 
-    // ── Step 1.5: 外部数据并行采集 (real data for feature vector) ──
+    // ── Step 1.5: 赔率特征提取 ──
+    let oddsDelta = 0, oddsImplied = 0, oddsVelocity = 0, marketPressureIndex = 0;
+    if (odds) {
+      const margin = 1/odds.homeOdds + 1/odds.drawOdds + 1/odds.awayOdds;
+      oddsImplied = (1/odds.homeOdds) / margin;
+      const oddsHistory = await prisma.oddsHistory.findMany({ where: { matchId: match.id }, orderBy: { timestamp: 'asc' } });
+      if (oddsHistory.length >= 2) {
+        const first = oddsHistory[0], last = oddsHistory[oddsHistory.length - 1];
+        const em = 1/first.homeOdds + 1/first.drawOdds + 1/first.awayOdds;
+        const lm = margin;
+        oddsDelta = parseFloat(((1/odds.homeOdds)/lm - (1/first.homeOdds)/em).toFixed(4));
+        const hours = (new Date(last.timestamp).getTime() - new Date(first.timestamp).getTime()) / 3600000;
+        oddsVelocity = hours > 0 ? parseFloat((oddsDelta / Math.max(hours, 1)).toFixed(4)) : 0;
+        marketPressureIndex = parseFloat((Math.log(first.homeOdds / Math.max(odds.homeOdds, 1.01)) * 0.5).toFixed(4));
+      }
+    }
+
+    // ── Step 1.6: 外部数据并行采集 (real data for feature vector) ──
     let rollingHome = { gf: 1.3, ga: 1.2, cleanSheets: 0, unbeatenStreak: 0, losingStreak: 0, lastGoalDiff: 0, n: 0 };
     let rollingAway = { gf: 1.3, ga: 1.2, cleanSheets: 0, unbeatenStreak: 0, losingStreak: 0, lastGoalDiff: 0, n: 0 };
     let h2hDetail = { meetings: 0, goalDiff: 0, avgTotalGoals: 0, drawRate: 0, last3Results: '' };
@@ -229,6 +246,12 @@ router.get('/predict/:matchId', async (req, res) => {
           lambdaVersion: 'V4: Unified Log-Linear (single-pass, no double fitting)',
           baseLambda: { home: mlResult.homeLambda, away: mlResult.awayLambda },
           adjustedLambda: { home: finalHome, away: finalAway },
+          oddsData: latestOdds ? {
+            opening: { home: latestOdds.currentHomeOdds, draw: latestOdds.currentDrawOdds, away: latestOdds.currentAwayOdds },
+            impliedHome: (oddsImplied * 100).toFixed(1) + '%',
+            delta: oddsDelta, velocity: oddsVelocity, pressure: marketPressureIndex,
+            updated: latestOdds.updatedAt,
+          } : null,
           fusion: odds ? `${(mktWeight * 100).toFixed(0)}% market` : 'pure statistical',
           residual: correction,
         },
